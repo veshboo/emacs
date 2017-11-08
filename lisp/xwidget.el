@@ -192,7 +192,7 @@ Interactively, URL defaults to the string looking like a url around point."
 (define-key (current-global-map) [xwidget-event] #'xwidget-event-handler)
 (defun xwidget-log (&rest msg)
   "Log MSG to a buffer."
-  (let ((buf (get-buffer-create " *xwidget-log*")))
+  (let ((buf (get-buffer-create "*xwidget-log*")))
     (with-current-buffer buf
       (insert (apply #'format msg))
       (insert "\n"))))
@@ -244,6 +244,7 @@ XWIDGET instance, XWIDGET-EVENT-TYPE depends on the originating xwidget."
 (define-derived-mode xwidget-webkit-mode
     special-mode "xwidget-webkit" "Xwidget webkit view mode."
     (setq buffer-read-only t)
+    (setq cursor-type nil)
     (setq-local bookmark-make-record-function
                 #'xwidget-webkit-bookmark-make-record)
     ;; Keep track of [vh]scroll when switching buffers
@@ -444,11 +445,23 @@ For example, use this to display an anchor."
   (ignore-errors
     (recenter-top-bottom)))
 
+;; Utility functions, wanted in `window.el'
+
+(defun xwidget-window-inside-pixel-width (window)
+  "Return Emacs WINDOW body width in pixel."
+  (let ((edges (window-inside-pixel-edges window)))
+    (- (nth 2 edges) (nth 0 edges))))
+
+(defun xwidget-window-inside-pixel-height (window)
+  "Return Emacs WINDOW body height in pixel."
+  (let ((edges (window-inside-pixel-edges window)))
+    (- (nth 3 edges) (nth 1 edges))))
+
 (defun xwidget-webkit-adjust-size-to-window (xwidget &optional window)
   "Adjust the size of the webkit XWIDGET to fit the WINDOW."
   (xwidget-resize xwidget
-                  (window-pixel-width window)
-                  (window-pixel-height window)))
+                  (xwidget-window-inside-pixel-width window)
+                  (xwidget-window-inside-pixel-height window)))
 
 (defun xwidget-webkit-adjust-size (w h)
   "Manually set webkit size to width W, height H."
@@ -487,10 +500,12 @@ For example, use this to display an anchor."
                                               (get-buffer-create bufname)))
     ;; The xwidget id is stored in a text property, so we need to have
     ;; at least character in this buffer.
-    (insert " ")
+    ;; Insert invisible url, good default for next `g' to browse url.
+    (insert url)
+    (put-text-property 1 (+ 1 (length url)) 'invisible t)
     (setq xw (xwidget-insert 1 'webkit bufname
-                             (window-pixel-width)
-                             (window-pixel-height)))
+                             (xwidget-window-inside-pixel-width (selected-window))
+                             (xwidget-window-inside-pixel-height (selected-window))))
     (xwidget-put xw 'callback 'xwidget-webkit-callback)
     (xwidget-webkit-mode)
     (xwidget-webkit-goto-uri (xwidget-webkit-last-session) url)))

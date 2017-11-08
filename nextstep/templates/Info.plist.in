@@ -675,5 +675,15 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 	</array>
 	<key>NSAppleScriptEnabled</key>
 	<string>YES</string>
+        <!-- FIXME: Uncomment for xwidget webkit to browse remote url,
+             but this set no restriction at all.  Consult apple's documentation
+             for detail information about `NSApplicationDefinedMask'. -->
+        <!--
+        <key>NSAppTransportSecurity</key>
+        <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+        </dict>
+        -->
 </dict>
 </plist>

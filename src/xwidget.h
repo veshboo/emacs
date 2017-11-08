@@ -29,7 +29,13 @@ struct xwidget_view;
 struct window;
 
 #ifdef HAVE_XWIDGETS
-# include <gtk/gtk.h>
+
+#if defined (USE_GTK)
+#include <gtk/gtk.h>
+#elif defined (HAVE_NS) && defined (__OBJC__)
+#import <AppKit/NSView.h>
+#import "nsxwidget.h"
+#endif
 
 struct xwidget
 {
@@ -52,9 +58,25 @@ struct xwidget
   int height;
   int width;
 
+#if defined (USE_GTK)
   /* For offscreen widgets, unused if not osr.  */
   GtkWidget *widget_osr;
   GtkWidget *widgetwindow_osr;
+#elif defined (HAVE_NS)
+# ifdef __OBJC__
+  /* For offscreen widgets, unused if not osr.  */
+  NSView *xwWidget;
+  XwWindow *xwWindow;
+
+  /* Used only for xwidget types (such as webkit2) enforcing 1 to 1
+     relationship between model and view. */
+  struct xwidget_view *xv;
+# else
+  void *xwWidget;
+  void *xwWindow;
+  struct xwidget_view *xv;
+# endif
+#endif
 
   /* Kill silently if Emacs is exited.  */
   bool_bf kill_without_query : 1;
@@ -74,9 +96,20 @@ struct xwidget_view
   /* The "live" instance isn't drawn.  */
   bool hidden;
 
+#if defined (USE_GTK)
   GtkWidget *widget;
   GtkWidget *widgetwindow;
   GtkWidget *emacswindow;
+#elif defined (HAVE_NS)
+# ifdef __OBJC__
+  XvWindow *xvWindow;
+  NSView *emacswindow;
+# else
+  void *xvWindow;
+  void *emacswindow;
+# endif
+#endif
+
   int x;
   int y;
   int clip_right;

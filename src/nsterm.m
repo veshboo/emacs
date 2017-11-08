@@ -48,6 +48,7 @@ GNUstep port and post-20 update by Adrian Robert (arobert@cogsci.ucsd.edu)
 #include "nsterm.h"
 #include "systime.h"
 #include "character.h"
+#include "xwidget.h"
 #include "fontset.h"
 #include "composite.h"
 #include "ccl.h"
@@ -4028,6 +4029,10 @@ ns_draw_glyph_string (struct glyph_string *s)
       ns_focus (s->f, r, n);
       ns_dumpglyphs_image (s, r[0]);
       ns_unfocus (s->f);
+      break;
+
+    case XWIDGET_GLYPH:
+      x_draw_xwidget_glyph_string (s);
       break;
 
     case STRETCH_GLYPH:
