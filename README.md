@@ -2,23 +2,41 @@
 
 This repo supports Emacs feature xwidgets on native macOS X Cocoa.
 
-Though original Emacs xwidgets builds and works on macOS but requires
-to build and work with X window and GTK instead of macOS's own GUI
+Though original Emacs xwidgets builds and works on macOS but must
+build and run with X window and GTK instead of macOS's own GUI
 framework, resulting unaligned styles and UX with surrounding desktop
 environment.
 
 **WARNING** This software is *EXPERIMENTAL* and *UNSTABLE*, can causes
 lost of data you are working on with this.
 
-For example, while I develop, watched once an abrupt termination of
+For example, while I develop, once watched an abrupt termination of
 this program that is not resolved.
 
 ## How to build
 
-* On quite recent macOS X system, (actually requires Xcode and WebKit2)
-* Git clone this repo and checkout master, then
-*
-```shell
+On quite recent macOS X system with Xcode and WebKit2
+
+* Git clone this repo and checkout master
+``` shell
+git clone https://github.com/veshboo/emacs.git
+git checkout master
+```
+
+* Notable dependencies
+``` shell
+brew install texinfo
+brew install gnutls
+```
+
+* Environment variable for newly installed texinfo (makeinfo)
+``` shell
+export PATH=/usr/local/opt/texinfo/bin:$PATH
+export LDFLAGS=-L/usr/local/opt/texinfo/lib
+```
+
+* then build Emacs
+``` shell
 ./autogen.sh
 ./configure --prefix=$HOME/works/emacs-devel --with-xwidgets
 make install
@@ -28,17 +46,18 @@ For general build information, read `INSTALL.REPO`.
 
 ## How to use
 
-Your Emacs app is located under `prefix`/nextstep/Emacs.app ... you can run it
-from command line
+Your Emacs app built is located under `prefix`/nextstep/Emacs.app
+... you can run it from command line
 
-```shell
+``` shell
 cd $HOME/works/emacs-devel/emacs
 ./nextstep/Emacs.app/Contents/MacOS/Emacs
 ```
 
-or by double-clicking Emacs app icon under `prefix`/nextstep folder in Finder.
+or by double-clicking Emacs app icon under `prefix`/nextstep folder in
+Finder.
 
-## Brief Xwidget webkit commands and key mappings
+## Brief xwidget webkit commands and key mappings
 
 * Commands
 
@@ -49,9 +68,10 @@ or by double-clicking Emacs app icon under `prefix`/nextstep folder in Finder.
       new session of webkit
 
 * Key mappings (apply when keyboard focus is in Emacs buffer not
-  webkit inside it, click mode-line to be sure)
+  webkit inside of it, click mode-line to be sure)
 
-    * space, shift-space, up/down, left/right, delete: Scrolling when
-      focus is in Emacs buffer not webkit inside it.
+    * space, shift-space, up/down, left/right, delete: Scrolling
 
     * b, r: backward, reload
+
+* Write elisp using `lisp/xwidget.el` to your task
