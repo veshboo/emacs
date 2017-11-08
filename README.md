@@ -1,4 +1,4 @@
-# nsxwidget - Emacs xwidgets webkit for NS Cocoa
+# nsxwidget - NS Cocoa backend for Emacs xwidgets
 
 This repo supports Emacs feature xwidgets on native macOS X Cocoa.
 
