@@ -13,6 +13,12 @@ lost of data you are working on with this.
 For example, while I develop, once watched an abrupt termination of
 this program that is not resolved.
 
+## Screenshot
+
+Reviewing pandoc generated html in emacs xwidget webkit for mac os x,
+
+![](nsxwidget-pandoc-yt.png)
+
 ## How to build
 
 On quite recent macOS X system with Xcode and WebKit2
