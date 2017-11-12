@@ -58,8 +58,10 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
 
 /* xwidget webkit */
 
-@interface XwWebView : WKWebView<WKNavigationDelegate, WKUIDelegate>
+@interface XwWebView : WKWebView
+<WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler>
 @property struct xwidget *xw;
+@property BOOL hasFocus;
 @end
 @implementation XwWebView : WKWebView
 
@@ -67,12 +69,23 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
       configuration:(WKWebViewConfiguration *)configuration
             xwidget:(struct xwidget *)xw
 {
+  /* Script controller to add script message handler and user script */
+  WKUserContentController *scriptor = [[WKUserContentController alloc] init];
+  configuration.userContentController = scriptor;
+
   self = [super initWithFrame:frame configuration:configuration];
   if (self)
     {
       self.xw = xw;
       self.navigationDelegate = self;
       self.UIDelegate = self;
+      self.hasFocus = NO;
+      [scriptor addScriptMessageHandler:self name:@"focusHandler"];
+      [scriptor addUserScript:[[WKUserScript alloc]
+                                initWithSource:xwScript
+                                 injectionTime:
+                                  WKUserScriptInjectionTimeAtDocumentEnd
+                                forMainFrameOnly:NO]];
     }
   return self;
 }
@@ -127,6 +140,56 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
   if (!navigationAction.targetFrame.isMainFrame)
     [webView loadRequest:navigationAction.request];
   return nil;
+}
+
+/* Basically emacs window own keyboard control, webview passes
+   keyboard event to emacs, unless input text field has focus */
+
+- (void)keyDown:(NSEvent *)event
+{
+  if (!self.hasFocus)
+    [self.xw->xv->emacswindow keyDown:event];
+  else
+    [super keyDown:event];
+}
+
+- (void)interpretKeyEvents:(NSArray<NSEvent *> *)eventArray
+{
+  /* We should do nothing and do not forward (default implementation
+     if we not override here) to let emacswindow collect key events
+     and ask interpretKeyEvents to its superclass */
+}
+
+static NSString *xwScript;
++(void) initialize
+{
+  /* Script to run in webkit as event handler, reports if any element
+     obtain or lose keyboard focus through `focusHandler' and throws
+     the focus away when `C-g' pressed. */
+  if (!xwScript)
+    xwScript =
+      @"function xwKeyDown(event) {"
+      @"  if (event.ctrlKey && event.key == 'g') {"
+      @"    event.target.blur();"
+      @"  }"
+      @"}"
+      @"function xwFocusIn(event) {"
+      @"  window.webkit.messageHandlers.focusHandler.postMessage(true);"
+      @"}"
+      @"function xwFocusOut(event) {"
+      @"  window.webkit.messageHandlers.focusHandler.postMessage(false);"
+      @"}"
+      @"document.addEventListener('focusin', xwFocusIn);"
+      @"document.addEventListener('focusout', xwFocusOut);"
+      @"document.addEventListener('keydown', xwKeyDown);"
+      ;
+}
+
+/* Confirming to WKScriptMessageHandler */
+- (void)userContentController:(WKUserContentController *)userContentController
+      didReceiveScriptMessage:(WKScriptMessage *)message
+{
+  self.hasFocus = [message.body boolValue];
 }
 
 @end
@@ -286,6 +349,11 @@ nsxwidget_kill (struct xwidget *xw)
 {
   if (xw)
     {
+      WKUserContentController *scriptor =
+        ((XwWebView *) xw->xwWidget).configuration.userContentController;
+      [scriptor removeAllUserScripts];
+      [scriptor removeScriptMessageHandlerForName:@"focusHandler"];
+      [scriptor release];
       xw->xv->model = Qnil; // Make sure related view stale
       [xw->xwWidget removeFromSuperviewWithoutNeedingDisplay];
       [xw->xwWidget release];
