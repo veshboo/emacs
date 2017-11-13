@@ -354,7 +354,8 @@ nsxwidget_kill (struct xwidget *xw)
       [scriptor removeAllUserScripts];
       [scriptor removeScriptMessageHandlerForName:@"focusHandler"];
       [scriptor release];
-      xw->xv->model = Qnil; // Make sure related view stale
+      if (xw->xv)
+        xw->xv->model = Qnil; // Make sure related view stale
       [xw->xwWidget removeFromSuperviewWithoutNeedingDisplay];
       [xw->xwWidget release];
       [xw->xwWindow removeFromSuperviewWithoutNeedingDisplay];

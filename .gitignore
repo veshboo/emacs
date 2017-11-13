@@ -278,3 +278,6 @@ nt/emacs.rc
 nt/emacsclient.rc
 src/gdb.ini
 /var/
+
+# macOS - Folder custom attributes files
+.DS_Store
