@@ -231,7 +231,7 @@ static void x_sync_with_move (struct frame *, int, int, bool);
 static int handle_one_xevent (struct x_display_info *,
 			      const XEvent *, int *,
 			      struct input_event *);
-#if ! (defined USE_X_TOOLKIT || defined USE_MOTIF)
+#if ! (defined USE_X_TOOLKIT || defined USE_MOTIF) && defined USE_GTK
 static int x_dispatch_event (XEvent *, Display *);
 #endif
 static void x_wm_set_window_state (struct frame *, int);
@@ -997,7 +997,11 @@ x_update_begin (struct frame *f)
 {
 #ifdef USE_CAIRO
   if (! NILP (tip_frame) && XFRAME (tip_frame) == f
-      && ! FRAME_VISIBLE_P (f))
+      && ! FRAME_VISIBLE_P (f)
+#ifdef USE_GTK
+      && !NILP (Fframe_parameter (tip_frame, Qtooltip))
+#endif
+      )
     return;
 
   if (! FRAME_CR_SURFACE (f))
@@ -9043,6 +9047,8 @@ handle_one_xevent (struct x_display_info *dpyinfo,
   return count;
 }
 
+#if defined USE_X_TOOLKIT || defined USE_MOTIF || defined USE_GTK
+
 /* Handles the XEvent EVENT on display DISPLAY.
    This is used for event loops outside the normal event handling,
    i.e. looping while a popup menu or a dialog is posted.
@@ -9061,6 +9067,7 @@ x_dispatch_event (XEvent *event, Display *display)
 
   return finish;
 }
+#endif
 
 /* Read events coming from the X server.
    Return as soon as there are no more events to be read.
@@ -9960,7 +9967,11 @@ x_new_font (struct frame *f, Lisp_Object font_object, int fontset)
       /* Don't change the size of a tip frame; there's no point in
 	 doing it because it's done in Fx_show_tip, and it leads to
 	 problems because the tip frame has no widget.  */
-      if (NILP (tip_frame) || XFRAME (tip_frame) != f)
+      if (NILP (tip_frame) || XFRAME (tip_frame) != f
+#ifdef USE_GTK
+	  || NILP (Fframe_parameter (tip_frame, Qtooltip))
+#endif
+	  )
 	{
 	  adjust_frame_size (f, FRAME_COLS (f) * FRAME_COLUMN_WIDTH (f),
 			     FRAME_LINES (f) * FRAME_LINE_HEIGHT (f), 3,
@@ -12504,7 +12515,7 @@ x_term_init (Lisp_Object display_name, char *xrm_option, char *resource_name)
       {
 	terminal->kboard = allocate_kboard (Qx);
 
-	if (!EQ (XSYMBOL (Qvendor_specific_keysyms)->function, Qunbound))
+	if (!EQ (XSYMBOL (Qvendor_specific_keysyms)->u.s.function, Qunbound))
 	  {
 	    char *vendor = ServerVendor (dpy);
 
