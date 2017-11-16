@@ -96,6 +96,26 @@ Interactively, URL defaults to the string looking like a url around point."
         (xwidget-webkit-new-session url)
       (xwidget-webkit-goto-url url))))
 
+(defun xwidget-webkit-cx2 ()
+  "New webkit session in `split-window-below' with URL of selected window."
+  (interactive)
+  (xwidget-webkit-execute-script
+   (xwidget-webkit-current-session)
+   "document.URL"
+   (lambda (url)
+     (with-selected-window (split-window-below)
+       (xwidget-webkit-new-session url)))))
+
+(defun xwidget-webkit-cx3 ()
+  "New webkit session in `split-window-right' with URL of selected window."
+  (interactive)
+  (xwidget-webkit-execute-script
+   (xwidget-webkit-current-session)
+   "document.URL"
+   (lambda (url)
+     (with-selected-window (split-window-right)
+       (xwidget-webkit-new-session url)))))
+
 ;;todo.
 ;; - check that the webkit support is compiled in
 (defvar xwidget-webkit-mode-map
@@ -131,6 +151,12 @@ Interactively, URL defaults to the string looking like a url around point."
     ;; (define-key map [remap move-end-of-line]       'image-eol)
     (define-key map [remap beginning-of-buffer] 'xwidget-webkit-scroll-top)
     (define-key map [remap end-of-buffer]       'xwidget-webkit-scroll-bottom)
+
+    ;; For macOS xwidget webkit, we don't support multiple views for a
+    ;; model, instead, create a new session and model behind the scene.
+    (when (memq window-system '(mac ns))
+      (define-key map (kbd "C-x 2") 'xwidget-webkit-cx2)
+      (define-key map (kbd "C-x 3") 'xwidget-webkit-cx3))
     map)
   "Keymap for `xwidget-webkit-mode'.")
 
