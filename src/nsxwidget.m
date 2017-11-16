@@ -227,10 +227,9 @@ nsxwidget_webkit_zoom (struct xwidget *xw, double zoom_change)
 static Lisp_Object
 build_string_with_nsstr (NSString *nsstr)
 {
-  NSUInteger bytes = [nsstr maximumLengthOfBytesUsingEncoding:NSUTF8StringEncoding];
-  char *buf = malloc (bytes); /* XXX: How is this free'd, GC? */
-  [nsstr getCString:buf maxLength:bytes encoding:NSUTF8StringEncoding];
-  return build_string (buf);
+  const char *utfstr = [nsstr UTF8String];
+  NSUInteger bytes = [nsstr lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+  return make_string (utfstr, bytes);
 }
 
 /* Recursively convert an objc native type JavaScript value to a Lisp
