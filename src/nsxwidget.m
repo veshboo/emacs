@@ -298,11 +298,6 @@ nsxwidget_webkit_execute_script (struct xwidget *xw, const char *script,
   NSString *javascriptString = [NSString stringWithUTF8String:script];
   XwWebView *xwWebView = (XwWebView *) xw->xwWidget;
 
-  /* FIXME: With objc blocks, no need to convert lisp FUN to
-     `gpointer', thus, no USE_LSB_TAG.  But still possible disaster if
-     FUN is garbage collected.  Is there any method to prohibit it
-     from garbage collected? */
-
   [xwWebView evaluateJavaScript:javascriptString
               completionHandler:^(id result, NSError *error) {
       if (error)

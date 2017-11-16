@@ -96,25 +96,37 @@ Interactively, URL defaults to the string looking like a url around point."
         (xwidget-webkit-new-session url)
       (xwidget-webkit-goto-url url))))
 
+;; NOTE: @javascript-callback - prefer defun to lambda.
+;; Lambda seems to be more easily garbage collected in flight from
+;; `xwidget-webkit-execute-script' to its execution via event.
+
+;; @javascript-callback
+(defun xwidget-webkit-cx2-cb (url)
+  "New xwidget webkit session and buffer with URL in split window below."
+  (with-selected-window (split-window-below)
+    (xwidget-webkit-new-session url)))
+
+;; @javascript-callback
+(defun xwidget-webkit-cx3-cb (url)
+  "New xwidget webkit session and buffer with URL in split window right."
+  (with-selected-window (split-window-right)
+    (xwidget-webkit-new-session url)))
+
 (defun xwidget-webkit-cx2 ()
-  "New webkit session in `split-window-below' with URL of selected window."
+  "Get the URL of current session, then `xwidget-webkit-cx2-cb'."
   (interactive)
   (xwidget-webkit-execute-script
    (xwidget-webkit-current-session)
    "document.URL"
-   (lambda (url)
-     (with-selected-window (split-window-below)
-       (xwidget-webkit-new-session url)))))
+   'xwidget-webkit-cx2-cb))
 
 (defun xwidget-webkit-cx3 ()
-  "New webkit session in `split-window-right' with URL of selected window."
+  "Get the URL of current session, then `xwidget-webkit-cx3-cb'."
   (interactive)
   (xwidget-webkit-execute-script
    (xwidget-webkit-current-session)
    "document.URL"
-   (lambda (url)
-     (with-selected-window (split-window-right)
-       (xwidget-webkit-new-session url)))))
+   'xwidget-webkit-cx3-cb))
 
 ;;todo.
 ;; - check that the webkit support is compiled in
@@ -244,16 +256,21 @@ XWIDGET instance, XWIDGET-EVENT-TYPE depends on the originating xwidget."
       (xwidget-log
        "error: callback called for xwidget with dead buffer")
     (with-current-buffer (xwidget-buffer xwidget)
+
+      ;; @javascript-callback
+      ;; We do not change selected window due to title changes
+      (defun xwidget-webkit-title-cb (title)
+        "Change buffer name using TITLE."
+        (xwidget-log "webkit finished loading: '%s'" title)
+        ;;TODO - check the native/internal scroll
+        ;;(xwidget-adjust-size-to-content xwidget)
+        (xwidget-webkit-adjust-size-to-window xwidget)
+        (rename-buffer (format "*xwidget webkit: %s *" title)))
+
       (cond ((eq xwidget-event-type 'load-changed)
              (xwidget-webkit-execute-script
               xwidget "document.title"
-              (lambda (title)
-                (xwidget-log "webkit finished loading: '%s'" title)
-                ;;TODO - check the native/internal scroll
-                ;;(xwidget-adjust-size-to-content xwidget)
-                (xwidget-webkit-adjust-size-to-window xwidget)
-                (rename-buffer (format "*xwidget webkit: %s *" title))))
-             (pop-to-buffer (current-buffer)))
+              'xwidget-webkit-title-cb))
             ((eq xwidget-event-type 'decide-policy)
              (let ((strarg  (nth 3 last-input-event)))
                (if (string-match ".*#\\(.*\\)" strarg)
@@ -345,6 +362,21 @@ current webkit widget."
   ;; Read out the string in the field first and provide for edit.
   (interactive)
   (let ((xww (xwidget-webkit-current-session)))
+
+    ;; @javascript-callback
+    (defun xwidget-webkit-insert-string-cb (field)
+      "Prompt a string for the FIELD and insert in the active input."
+      (let ((str (pcase field
+                   (`[,val "text"]
+                    (read-string "Text: " val))
+                   (`[,val "password"]
+                    (read-passwd "Password: " nil val))
+                   (`[,val "textarea"]
+                    (xwidget-webkit-begin-edit-textarea xww val)))))
+        (xwidget-webkit-execute-script
+         xww
+         (format "findactiveelement(document).value='%s'" str))))
+
     (xwidget-webkit-execute-script
      xww
      (concat xwidget-webkit-activeelement-js "
@@ -352,17 +384,7 @@ current webkit widget."
   var res = findactiveelement(document);
   return [res.value, res.type];
 })();")
-     (lambda (field)
-       (let ((str (pcase field
-                    (`[,val "text"]
-                     (read-string "Text: " val))
-                    (`[,val "password"]
-                     (read-passwd "Password: " nil val))
-                    (`[,val "textarea"]
-                     (xwidget-webkit-begin-edit-textarea xww val)))))
-         (xwidget-webkit-execute-script
-          xww
-          (format "findactiveelement(document).value='%s'" str)))))))
+     'xwidget-webkit-insert-string-cb)))
 
 (defvar xwidget-xwbl)
 (defun xwidget-webkit-begin-edit-textarea (xw text)
@@ -556,14 +578,18 @@ For example, use this to display an anchor."
   (xwidget-webkit-execute-script (xwidget-webkit-current-session)
                                  "history.go(0);"))
 
+;; @javascript-callback
+(defun xwidget-webkit-current-url-cb (result)
+  "Callback for `xwidget-webkit-current-url', message and kill the RESULT."
+  (let ((url (kill-new (or result ""))))
+    (message "url: %s" url)))
+
 (defun xwidget-webkit-current-url ()
   "Get the webkit url and place it on the kill-ring."
   (interactive)
   (xwidget-webkit-execute-script
    (xwidget-webkit-current-session)
-   "document.URL" (lambda (rv)
-                    (let ((url (kill-new (or rv ""))))
-                      (message "url: %s" url)))))
+   "document.URL" 'xwidget-webkit-current-url-cb))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defun xwidget-webkit-get-selection (proc)
@@ -573,10 +599,15 @@ For example, use this to display an anchor."
    "window.getSelection().toString();"
    proc))
 
+;; @javascript-callback
+(defun xwidget-webkit-kill-text-cb (text)
+  "Callback run with javascript result TEXT, put it to `kill-ring'."
+  (kill-new text))
+
 (defun xwidget-webkit-copy-selection-as-kill ()
   "Get the webkit selection and put it on the kill-ring."
   (interactive)
-  (xwidget-webkit-get-selection (lambda (selection) (kill-new selection))))
+  (xwidget-webkit-get-selection 'xwidget-webkit-kill-text-cb))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

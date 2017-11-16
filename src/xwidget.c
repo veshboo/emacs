@@ -407,9 +407,8 @@ webkit_javascript_finished_cb (GObject      *webview,
     /* Register an xwidget event here, which then runs the callback.
        This ensures that the callback runs in sync with the Emacs
        event loop.  */
-    /* FIXME: This might lead to disaster if LISP_CALLBACK’s object
-       was garbage collected before now.  See the FIXME in
-       Fxwidget_webkit_execute_script.  */
+    /* LISP_CALLBACK must not be garbage collected up to here.  See
+       comments in Fxwidget_webkit_execute_script. */
     store_xwidget_js_callback_event (xw, XIL ((intptr_t) lisp_callback),
                                      lisp_value);
 }
@@ -790,7 +789,10 @@ argument procedure FUN.*/)
 {
   WEBKIT_FN_INIT ();
   CHECK_STRING (script);
-  if (!NILP (fun) && !FUNCTIONP (fun))
+  /* FUN will not be garbage collected if it is defined with `defun'
+     instead of `lambda'.  If it is garbage collected even though it
+     is `defun', we can counter by pinning the FUN's symbol. */
+  if (!NILP (fun) && !SYMBOLP (fun) && !NILP (Ffboundp (fun)))
     wrong_type_argument (Qinvalid_function, fun);
 
 #if defined (USE_GTK)
@@ -799,9 +801,6 @@ argument procedure FUN.*/)
 
   /* FIXME: The following hack assumes USE_LSB_TAG.  */
   verify (USE_LSB_TAG);
-  /* FIXME: This hack might lead to disaster if FUN is garbage
-     collected before store_xwidget_js_callback_event makes it visible
-     to Lisp again.  See the FIXME in webkit_javascript_finished_cb.  */
   gpointer callback_arg = (gpointer) (intptr_t) XLI (fun);
 
   /* JavaScript execution happens asynchronously.  If an elisp
