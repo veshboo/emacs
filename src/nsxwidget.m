@@ -142,6 +142,23 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
   return nil;
 }
 
+/* By forwarding mouse events to emacs view (frame)
+   - mouse click in webview selects the window contains the webview
+   - correct mouse hand/arrow/I-beam is display (TODO: not perfect yet)
+*/
+
+- (void)mouseDown:(NSEvent *)event
+{
+  [self.xw->xv->emacswindow mouseDown:event];
+  [super mouseDown:event];
+}
+
+- (void)mouseUp:(NSEvent *)event
+{
+  [self.xw->xv->emacswindow mouseUp:event];
+  [super mouseUp:event];
+}
+
 /* Basically emacs window own keyboard control, webview passes
    keyboard event to emacs, unless input text field has focus */
 
