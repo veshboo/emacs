@@ -246,7 +246,6 @@ Interactively, URL defaults to the string looking like a url around point."
        ;;TODO stopped working for some reason
        )
     ;;(funcall  xwidget-callback xwidget xwidget-event-type)
-    (message "xw callback %s" xwidget)
     (funcall  'xwidget-webkit-callback xwidget xwidget-event-type)))
 
 (defun xwidget-webkit-callback (xwidget xwidget-event-type)
@@ -259,12 +258,11 @@ XWIDGET instance, XWIDGET-EVENT-TYPE depends on the originating xwidget."
 
       ;; @javascript-callback
       ;; We do not change selected window due to title changes
+      ;; and also do not adjust size to window here, the window
+      ;; can be the mini-buffer window unwantedly.
       (defun xwidget-webkit-title-cb (title)
         "Change buffer name using TITLE."
         (xwidget-log "webkit finished loading: '%s'" title)
-        ;;TODO - check the native/internal scroll
-        ;;(xwidget-adjust-size-to-content xwidget)
-        (xwidget-webkit-adjust-size-to-window xwidget)
         (rename-buffer (format "*xwidget webkit: %s *" title)))
 
       (cond ((eq xwidget-event-type 'load-changed)

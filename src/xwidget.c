@@ -615,7 +615,7 @@ x_draw_xwidget_glyph_string (struct glyph_string *s)
   int clip_left;
 
   int x = s->x;
-  int y = s->y + (s->height / 2) - (xww->height / 2);
+  int y = s->y;
 
   /* Do initialization here in the display loop because there is no
      other time to know things like window placement etc.  */
@@ -647,6 +647,20 @@ x_draw_xwidget_glyph_string (struct glyph_string *s)
 
   window_box (s->w, TEXT_AREA, &text_area_x, &text_area_y,
               &text_area_width, &text_area_height);
+
+  /* Resize xwidget webkit if its container window size is changed in
+     some ways, for example, a buffer became hidden in small split
+     window, then it can appear front in merged whole window. */
+  if (EQ (xww->type, Qwebkit)
+      && (xww->width != text_area_width || xww->height != text_area_height))
+    {
+      Lisp_Object xwl;
+      XSETXWIDGET (xwl, xww);
+      Fxwidget_resize (xwl,
+                       make_number (text_area_width),
+                       make_number (text_area_height));
+    }
+
   clip_left = max (0, text_area_x - x);
   clip_right = max (clip_left,
 		    min (xww->width, text_area_x + text_area_width - x));
