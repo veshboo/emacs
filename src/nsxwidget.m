@@ -193,7 +193,12 @@ static NSString *xwScript;
     xwScript =
       @"function xwHasFocus() {"
       @"  var ae = document.activeElement;"
-      @"  return !(ae == null || ae.tagName.toUpperCase() === 'BODY');"
+      @"  if (ae) {"
+      @"    var name = ae.nodeName;"
+      @"    return name == 'INPUT' || name == 'TEXTAREA';"
+      @"  } else {"
+      @"    return false;"
+      @"  }"
       @"}"
       @"function xwKeyDown(event) {"
       @"  if (event.ctrlKey && event.key == 'g') {"
