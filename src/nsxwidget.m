@@ -59,9 +59,8 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
 /* xwidget webkit */
 
 @interface XwWebView : WKWebView
-<WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler>
+<WKNavigationDelegate, WKUIDelegate>
 @property struct xwidget *xw;
-@property BOOL hasFocus;
 @end
 @implementation XwWebView : WKWebView
 
@@ -79,8 +78,6 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
       self.xw = xw;
       self.navigationDelegate = self;
       self.UIDelegate = self;
-      self.hasFocus = NO;
-      [scriptor addScriptMessageHandler:self name:@"focusHandler"];
       [scriptor addUserScript:[[WKUserScript alloc]
                                 initWithSource:xwScript
                                  injectionTime:
@@ -164,10 +161,19 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
 
 - (void)keyDown:(NSEvent *)event
 {
-  if (!self.hasFocus)
-    [self.xw->xv->emacswindow keyDown:event];
-  else
-    [super keyDown:event];
+  [self evaluateJavaScript:@"xwHasFocus()"
+         completionHandler:^(id result, NSError *error) {
+      if (error)
+        NSLog (@"xwHasFocus: %@", error.localizedDescription);
+      else if (result)
+        {
+          NSNumber *hasFocus = result; // __NSCFBoolean
+          if (!hasFocus.boolValue)
+            [self.xw->xv->emacswindow keyDown:event];
+          else
+            [super keyDown:event];
+        }
+    }];
 }
 
 - (void)interpretKeyEvents:(NSArray<NSEvent *> *)eventArray
@@ -185,28 +191,17 @@ static NSString *xwScript;
      the focus away when `C-g' pressed. */
   if (!xwScript)
     xwScript =
+      @"function xwHasFocus() {"
+      @"  var ae = document.activeElement;"
+      @"  return !(ae == null || ae.tagName.toUpperCase() === 'BODY');"
+      @"}"
       @"function xwKeyDown(event) {"
       @"  if (event.ctrlKey && event.key == 'g') {"
       @"    event.target.blur();"
       @"  }"
       @"}"
-      @"function xwFocusIn(event) {"
-      @"  window.webkit.messageHandlers.focusHandler.postMessage(true);"
-      @"}"
-      @"function xwFocusOut(event) {"
-      @"  window.webkit.messageHandlers.focusHandler.postMessage(false);"
-      @"}"
-      @"document.addEventListener('focusin', xwFocusIn);"
-      @"document.addEventListener('focusout', xwFocusOut);"
       @"document.addEventListener('keydown', xwKeyDown);"
       ;
-}
-
-/* Confirming to WKScriptMessageHandler */
-- (void)userContentController:(WKUserContentController *)userContentController
-      didReceiveScriptMessage:(WKScriptMessage *)message
-{
-  self.hasFocus = [message.body boolValue];
 }
 
 @end
