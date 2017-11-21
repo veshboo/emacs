@@ -1,13 +1,11 @@
 !include MUI2.nsh
+!include LogicLib.nsh
+!include x64.nsh
+
+Outfile "emacs-${OUT_VERSION}-${ARCH}-installer.exe"
 
 
-Outfile "Emacs-${ARCH}-${OUT_VERSION}-installer.exe"
-
-
-
-InstallDir "$DESKTOP\Emacs-${EMACS_VERSION}"
 SetCompressor /solid lzma
-
 
 Var StartMenuFolder
 
@@ -17,6 +15,8 @@ Var StartMenuFolder
 !define MUI_WELCOMEPAGE_TEXT "Welcome to Emacs -- the editor of a lifetime."
 
 !define MUI_WELCOMEFINISHPAGE_BITMAP "${ARCH}\share\emacs\${EMACS_VERSION}\etc\images\splash.bmp"
+!define MUI_ICON "${ARCH}\share\emacs\${EMACS_VERSION}\etc\images\icons\hicolor\scalable\apps\emacs.ico"
+!define MUI_UNICON "${ARCH}\share\emacs\${EMACS_VERSION}\etc\images\icons\hicolor\scalable\apps\emacs.ico"
 
 !insertmacro MUI_PAGE_WELCOME
 
@@ -34,6 +34,23 @@ Var StartMenuFolder
 
 !insertmacro MUI_LANGUAGE "English"
 Name Emacs-${EMACS_VERSION}
+
+function .onInit
+  ${If} ${RunningX64}
+    ${If} ${ARCH} == "x86_64"
+      StrCpy $INSTDIR "$PROGRAMFILES64\Emacs"
+    ${Else}
+      StrCpy $INSTDIR "$PROGRAMFILES32\Emacs"
+    ${Endif}
+  ${Else}
+    ${If} ${ARCH} == "x86_64"
+      Quit
+    ${Else}
+      StrCpy $INSTDIR "$PROGRAMFILES\Emacs"
+    ${Endif}
+  ${EndIf}
+functionend
+
 
 Section
 

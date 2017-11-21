@@ -1858,7 +1858,8 @@ letter into the file name.  This function removes it."
      (if (tramp-compat-file-name-quoted-p name)
 	 'tramp-compat-file-name-quote 'identity)
      (let ((name (tramp-compat-file-name-unquote name)))
-       (if (string-match "\\`[a-zA-Z]:/" name)
+       ;; A volume letter could occur also in encoded backup file names.
+       (if (string-match "\\(\\`[[:alpha:]]:/\\|/!drive_[[:alpha:]]\\)" name)
 	   (replace-match "/" nil t name)
 	 name)))))
 
@@ -3207,7 +3208,8 @@ User is always nil."
 			 (if (file-remote-p symlink-target)
 			     (let (file-name-handler-alist)
 			       (tramp-compat-file-name-quote symlink-target))
-			   symlink-target)
+			   (expand-file-name
+			    symlink-target (file-name-directory v2-localname)))
 		       v2-localname)))))
 	   (when (>= numchase numchase-limit)
 	     (tramp-error
@@ -3221,21 +3223,23 @@ User is always nil."
 (defun tramp-handle-find-backup-file-name (filename)
   "Like `find-backup-file-name' for Tramp files."
   (with-parsed-tramp-file-name filename nil
-    (let ((backup-directory-alist
-	   (if tramp-backup-directory-alist
-	       (mapcar
-		(lambda (x)
-		  (cons
-		   (car x)
-		   (if (and (stringp (cdr x))
-			    (file-name-absolute-p (cdr x))
-			    (not (tramp-tramp-file-p (cdr x))))
-		       (tramp-make-tramp-file-name
-			method user domain host port (cdr x) hop)
-		     (cdr x))))
-		tramp-backup-directory-alist)
-	     backup-directory-alist)))
-      (tramp-run-real-handler 'find-backup-file-name (list filename)))))
+    (mapcar
+     'tramp-drop-volume-letter
+     (let ((backup-directory-alist
+	    (if tramp-backup-directory-alist
+		(mapcar
+		 (lambda (x)
+		   (cons
+		    (car x)
+		    (if (and (stringp (cdr x))
+			     (file-name-absolute-p (cdr x))
+			     (not (tramp-tramp-file-p (cdr x))))
+			(tramp-make-tramp-file-name
+			 method user domain host port (cdr x) hop)
+		      (cdr x))))
+		 tramp-backup-directory-alist)
+	      backup-directory-alist)))
+       (tramp-run-real-handler 'find-backup-file-name (list filename))))))
 
 (defun tramp-handle-insert-directory
   (filename switches &optional wildcard full-directory-p)

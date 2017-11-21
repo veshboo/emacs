@@ -47,21 +47,28 @@ function build_zip {
     cd $HOME/emacs-build/build/emacs-$VERSION/$ARCH
 
     export PKG_CONFIG_PATH=$PKG
+
+    ## Running configure forces a rebuild of the C core which takes
+    ## time that is not always needed
+    if (($CONFIG))
+    then
     ../../../git/$BRANCH/configure \
         --without-dbus \
         --host=$HOST --without-compress-install \
         $CACHE \
         CFLAGS="-O2 -static -g3"
+    fi
+
     make -j 16 install \
          prefix=$HOME/emacs-build/install/emacs-$VERSION/$ARCH
     cd $HOME/emacs-build/install/emacs-$VERSION/$ARCH
     cp $HOME/emacs-build/deps/libXpm/$ARCH/libXpm-noX4.dll bin
-    zip -r -9 emacs-$VERSION-$ARCH-no-deps.zip *
-    mv emacs-$VERSION-$ARCH-no-deps.zip $HOME/emacs-upload
+    zip -r -9 emacs-$OF_VERSION-$ARCH-no-deps.zip *
+    mv emacs-$OF_VERSION-$ARCH-no-deps.zip $HOME/emacs-upload
     rm bin/libXpm-noX4.dll
     unzip $HOME/emacs-build/deps/emacs-26-$ARCH-deps.zip
-    zip -r -9 emacs-$VERSION-$ARCH.zip *
-    mv emacs-$VERSION-$ARCH.zip ~/emacs-upload
+    zip -r -9 emacs-$OF_VERSION-$ARCH.zip *
+    mv emacs-$OF_VERSION-$ARCH.zip ~/emacs-upload
 }
 
 function build_installer {
@@ -69,10 +76,12 @@ function build_installer {
     cd $HOME/emacs-build/install/emacs-$VERSION
     echo Calling makensis in `pwd`
     cp ../../git/$BRANCH/admin/nt/dist-build/emacs.nsi .
-    makensis -DARCH=$ARCH -DEMACS_VERSION=$ACTUAL_VERSION \
-             -DOUT_VERSION=$VERSION emacs.nsi
+
+    makensis -v4 \
+             -DARCH=$ARCH -DEMACS_VERSION=$ACTUAL_VERSION \
+             -DOUT_VERSION=$OF_VERSION emacs.nsi
     rm emacs.nsi
-    mv Emacs-$ARCH-$VERSION-installer.exe ~/emacs-upload
+    mv emacs-$OF_VERSION-$ARCH-installer.exe ~/emacs-upload
 }
 
 set -o errexit
@@ -84,8 +93,9 @@ BUILD=1
 BUILD_32=1
 BUILD_64=1
 GIT_UP=0
+CONFIG=1
 
-while getopts "36ghsiV:" opt; do
+while getopts "36ghnsiV:" opt; do
   case $opt in
     3)
         BUILD_32=1
@@ -103,8 +113,11 @@ while getopts "36ghsiV:" opt; do
         BUILD_64=0
         GIT_UP=1
         ;;
+    n)
+        CONFIG=0
+        ;;
     i)
-        BUILD=1
+        BUILD=0
         ;;
     V)
         VERSION=$OPTARG
@@ -117,6 +130,7 @@ while getopts "36ghsiV:" opt; do
         echo "  -3 32 bit build only"
         echo "  -6 64 bit build only"
         echo "  -g git update and worktree only"
+        echo "  -i build installer only"
         exit 0
         ;;
     \?)
@@ -140,16 +154,18 @@ fi
 
 MAJOR_VERSION="$(echo $VERSION | cut -d'.' -f1)"
 
+ACTUAL_VERSION=$VERSION
+VERSION=$VERSION$SNAPSHOT
+OF_VERSION=$VERSION
+
 if [ -z $SNAPSHOT ];
 then
     BRANCH=emacs-$VERSION
 else
     BRANCH=master
     CACHE=-C
+    OF_VERSION="$VERSION-`date +%Y-%m-%d`"
 fi
-
-ACTUAL_VERSION=$VERSION
-VERSION=$VERSION$SNAPSHOT
 
 if (($GIT_UP))
 then

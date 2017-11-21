@@ -2671,7 +2671,7 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
 	    (should-error
 	     (make-symbolic-link tmp-name1 tmp-name2)
 	     :type 'file-already-exists)
-	    ;; number means interactive case.
+	    ;; A number means interactive case.
 	    (cl-letf (((symbol-function 'yes-or-no-p) 'ignore))
 	      (should-error
 	       (make-symbolic-link tmp-name1 tmp-name2 0)
@@ -2778,6 +2778,15 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
 	    (should (file-exists-p tmp-name1))
 	    (should (string-equal tmp-name1 (file-truename tmp-name1)))
 	    (make-symbolic-link tmp-name1 tmp-name2)
+	    (should (file-symlink-p tmp-name2))
+	    (should-not (string-equal tmp-name2 (file-truename tmp-name2)))
+	    (should
+	     (string-equal (file-truename tmp-name1) (file-truename tmp-name2)))
+	    (should (file-equal-p tmp-name1 tmp-name2))
+	    ;; Check relative symlink file name.
+	    (delete-file tmp-name2)
+	    (let ((default-directory tramp-test-temporary-file-directory))
+	      (make-symbolic-link (file-name-nondirectory tmp-name1) tmp-name2))
 	    (should (file-symlink-p tmp-name2))
 	    (should-not (string-equal tmp-name2 (file-truename tmp-name2)))
 	    (should
@@ -2921,6 +2930,7 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
 	;; Cleanup.
 	(ignore-errors (delete-file tmp-name))))))
 
+;; This test is inspired by Bug#29149.
 (ert-deftest tramp-test24-file-acl ()
   "Check that `file-acl' and `set-file-acl' work proper."
   (skip-unless (tramp--test-enabled))
@@ -2939,7 +2949,7 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
 	    (write-region "foo" nil tmp-name1)
 	    (should (file-exists-p tmp-name1))
 	    (should (file-acl tmp-name1))
-	    (copy-file tmp-name1 tmp-name2)
+	    (copy-file tmp-name1 tmp-name2 nil nil nil 'preserve-permissions)
 	    (should (file-acl tmp-name2))
 	    (should (string-equal (file-acl tmp-name1) (file-acl tmp-name2)))
 	    ;; Different permissions mean different ACLs.
@@ -2965,7 +2975,7 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
 	    (write-region "foo" nil tmp-name1)
 	    (should (file-exists-p tmp-name1))
 	    (should (file-acl tmp-name1))
-	    (copy-file tmp-name1 tmp-name3)
+	    (copy-file tmp-name1 tmp-name3 nil nil nil 'preserve-permissions)
 	    (should (file-acl tmp-name3))
 	    (should (string-equal (file-acl tmp-name1) (file-acl tmp-name3)))
 	    ;; Different permissions mean different ACLs.
@@ -2973,13 +2983,14 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
 	    (set-file-modes tmp-name3 #o444)
 	    (should-not
 	     (string-equal (file-acl tmp-name1) (file-acl tmp-name3)))
-	    ;; Copy ACL.
-	    (set-file-acl tmp-name3 (file-acl tmp-name1))
-	    (should (string-equal (file-acl tmp-name1) (file-acl tmp-name3)))
+	    ;; Copy ACL.  Since we don't know whether Emacs is built
+	    ;; with local ACL support, we must check it.
+	    (when (set-file-acl tmp-name3 (file-acl tmp-name1))
+	      (should (string-equal (file-acl tmp-name1) (file-acl tmp-name3))))
 
 	    ;; Two files with same ACLs.
 	    (delete-file tmp-name1)
-	    (copy-file tmp-name3 tmp-name1)
+	    (copy-file tmp-name3 tmp-name1 nil nil nil 'preserve-permissions)
 	    (should (file-acl tmp-name1))
 	    (should (string-equal (file-acl tmp-name1) (file-acl tmp-name3)))
 	    ;; Different permissions mean different ACLs.
@@ -2995,8 +3006,6 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
 	(ignore-errors (delete-file tmp-name1))
 	(ignore-errors (delete-file tmp-name3))))))
 
-;; TODO: This test didn't run in reality yet.  Pls report if it
-;; doesn't work as expected.
 (ert-deftest tramp-test25-file-selinux ()
   "Check `file-selinux-context' and `set-file-selinux-context'."
   (skip-unless (tramp--test-enabled))
@@ -3013,7 +3022,7 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
       ;; Both files are remote.
       (unwind-protect
 	  (progn
-	    ;; Two files with same SELINUX context.
+	    ;; Two files with same SELinux context.
 	    (write-region "foo" nil tmp-name1)
 	    (should (file-exists-p tmp-name1))
 	    (should (file-selinux-context tmp-name1))
@@ -3023,14 +3032,18 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
 	     (equal
 	      (file-selinux-context tmp-name1)
 	      (file-selinux-context tmp-name2)))
-	    ;; Different permissions mean different SELINUX context.
-	    (set-file-modes tmp-name1 #o777)
-	    (set-file-modes tmp-name2 #o444)
-	    (should-not
-	     (equal
-	      (file-selinux-context tmp-name1)
-	      (file-selinux-context tmp-name2)))
-	    ;; Copy SELINUX context.
+	    ;; Check different SELinux context.  We cannot support
+	    ;; different ranges in this test; let's assume the most
+	    ;; likely one.
+	    (let ((context (file-selinux-context tmp-name1)))
+	      (when (and (string-equal (nth 3 context) "s0")
+			 (setcar (nthcdr 3 context) "s0:c0")
+			 (set-file-selinux-context tmp-name1 context))
+		(should-not
+		 (equal
+		  (file-selinux-context tmp-name1)
+		  (file-selinux-context tmp-name2)))))
+	    ;; Copy SELinux context.
 	    (should
 	     (set-file-selinux-context
 	      tmp-name2 (file-selinux-context tmp-name1)))
@@ -3038,7 +3051,7 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
 	     (equal
 	      (file-selinux-context tmp-name1)
 	      (file-selinux-context tmp-name2)))
-	    ;; An invalid SELINUX context does not harm.
+	    ;; An invalid SELinux context does not harm.
 	    (should-not (set-file-selinux-context tmp-name2 "foo")))
 
 	;; Cleanup.
@@ -3047,52 +3060,83 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
 
       ;; Remote and local file.
       (unwind-protect
-	  (when (not (or (equal (file-selinux-context temporary-file-directory)
-				'(nil nil nil nil))
-			 (tramp--test-windows-nt-or-smb-p)))
-	    ;; Two files with same SELINUX context.
+	  (when (and (not
+		      (or (equal (file-selinux-context temporary-file-directory)
+				 '(nil nil nil nil))
+			  (tramp--test-windows-nt-or-smb-p)))
+		     ;; Both users shall use the same SELinux context.
+		     (string-equal
+		      (let ((default-directory temporary-file-directory))
+			(shell-command-to-string "id -Z"))
+		      (let ((default-directory
+			      tramp-test-temporary-file-directory))
+			(shell-command-to-string "id -Z"))))
+
+	    ;; Two files with same SELinux context.
 	    (write-region "foo" nil tmp-name1)
 	    (should (file-exists-p tmp-name1))
 	    (should (file-selinux-context tmp-name1))
 	    (copy-file tmp-name1 tmp-name3)
 	    (should (file-selinux-context tmp-name3))
+	    ;; We cannot expect that copying over file system
+	    ;; boundaries keeps SELinux context.  So we copy it
+	    ;; explicitly.
+	    (should
+	     (set-file-selinux-context
+	      tmp-name3 (file-selinux-context tmp-name1)))
 	    (should
 	     (equal
 	      (file-selinux-context tmp-name1)
 	      (file-selinux-context tmp-name3)))
-	    ;; Different permissions mean different SELINUX context.
-	    (set-file-modes tmp-name1 #o777)
-	    (set-file-modes tmp-name3 #o444)
-	    (should-not
-	     (equal
-	      (file-selinux-context tmp-name1)
-	      (file-selinux-context tmp-name3)))
-	    ;; Copy SELINUX context.
-	    (set-file-selinux-context
-	     tmp-name3 (file-selinux-context tmp-name1))
+	    ;; Check different SELinux context.  We cannot support
+	    ;; different ranges in this test; let's assume the most
+	    ;; likely one.
+	    (let ((context (file-selinux-context tmp-name1)))
+	      (when (and (string-equal (nth 3 context) "s0")
+			 (setcar (nthcdr 3 context) "s0:c0")
+			 (set-file-selinux-context tmp-name1 context))
+		(should-not
+		 (equal
+		  (file-selinux-context tmp-name1)
+		  (file-selinux-context tmp-name3)))))
+	    ;; Copy SELinux context.
+	    (should
+	     (set-file-selinux-context
+	      tmp-name3 (file-selinux-context tmp-name1)))
 	    (should
 	     (equal
 	      (file-selinux-context tmp-name1)
 	      (file-selinux-context tmp-name3)))
 
-	    ;; Two files with same SELINUX context.
+	    ;; Two files with same SELinux context.
 	    (delete-file tmp-name1)
 	    (copy-file tmp-name3 tmp-name1)
 	    (should (file-selinux-context tmp-name1))
+	    ;; We cannot expect that copying over file system
+	    ;; boundaries keeps SELinux context.  So we copy it
+	    ;; explicitly.
+	    (should
+	     (set-file-selinux-context
+	      tmp-name1 (file-selinux-context tmp-name3)))
 	    (should
 	     (equal
 	      (file-selinux-context tmp-name1)
 	      (file-selinux-context tmp-name3)))
-	    ;; Different permissions mean different SELINUX context.
-	    (set-file-modes tmp-name1 #o777)
-	    (set-file-modes tmp-name3 #o444)
-	    (should-not
-	     (equal
-	      (file-selinux-context tmp-name1)
-	      (file-selinux-context tmp-name3)))
-	    ;; Copy SELINUX context.
-	    (set-file-selinux-context
-	     tmp-name1 (file-selinux-context tmp-name2))
+	    ;; Check different SELinux context.  We cannot support
+	    ;; different ranges in this test; let's assume the most
+	    ;; likely one.
+	    (let ((context (file-selinux-context tmp-name3)))
+	      (when (and (string-equal (nth 3 context) "s0")
+			 (setcar (nthcdr 3 context) "s0:c0")
+			 (set-file-selinux-context tmp-name3 context))
+		(should-not
+		 (equal
+		  (file-selinux-context tmp-name1)
+		  (file-selinux-context tmp-name3)))))
+	    ;; Copy SELinux context.
+	    (should
+	     (set-file-selinux-context
+	      tmp-name1 (file-selinux-context tmp-name3)))
 	    (should
 	     (equal
 	      (file-selinux-context tmp-name1)
@@ -3619,7 +3663,7 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
 		    (fboundp 'connection-local-set-profiles)))
 
   ;; `connection-local-set-profile-variables' and
-  ;; `connection-local-set-profiles' exist since Emacs 26.  We don't
+  ;; `connection-local-set-profiles' exist since Emacs 26.1.  We don't
   ;; want to see compiler warnings for older Emacsen.
   (let ((default-directory tramp-test-temporary-file-directory)
 	explicit-shell-file-name kill-buffer-query-functions)
@@ -3923,8 +3967,8 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
    (and (fboundp 'make-nearby-temp-file) (fboundp 'temporary-file-directory)))
 
   ;; `make-nearby-temp-file' and `temporary-file-directory' exists
-  ;; since Emacs 26.  We don't want to see compiler warnings for older
-  ;; Emacsen.
+  ;; since Emacs 26.1.  We don't want to see compiler warnings for
+  ;; older Emacsen.
   (let ((default-directory tramp-test-temporary-file-directory)
 	tmp-file)
     ;; The remote host shall know a temporary file directory.
@@ -4622,7 +4666,8 @@ process sentinels.  They shall not disturb each other."
 	   (message \"Tramp loaded: %%s\" (featurep 'tramp)) \
 	   (file-name-all-completions \"/foo:\" \"/\") \
 	   (message \"Tramp loaded: %%s\" (featurep 'tramp)))"))
-    (dolist (tm '(t nil))
+    ;; Tramp doesn't load when `tramp-mode' is nil since Emacs 26.1.
+    (dolist (tm (if (tramp--test-emacs26-p) '(t nil) '(nil)))
       (should
        (string-match
 	(format
