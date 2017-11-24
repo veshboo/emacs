@@ -78,6 +78,10 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
       self.xw = xw;
       self.navigationDelegate = self;
       self.UIDelegate = self;
+      self.customUserAgent =
+        @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6)"
+        @" AppleWebKit/603.3.8 (KHTML, like Gecko)"
+        @" Version/11.0.1 Safari/603.3.8";
       [scriptor addUserScript:[[WKUserScript alloc]
                                 initWithSource:xwScript
                                  injectionTime:
