@@ -266,7 +266,7 @@ js_to_lisp (id value)
     {
       NSNumber *nsnum = (NSNumber *) value;
       char type = nsnum.objCType[0];
-      if (type == 'B')
+      if (type == 'c') // __NSCFBoolean has type character 'c'
         return nsnum.boolValue? Qt : Qnil;
       else
         {
@@ -308,7 +308,7 @@ js_to_lisp (id value)
       XSETVECTOR (obj, p);
       return obj;
     }
-  NSLog (@"Unhandled number type in javascript result");
+  NSLog (@"Unhandled type in javascript result");
   return Qnil;
 }
 
@@ -323,7 +323,7 @@ nsxwidget_webkit_execute_script (struct xwidget *xw, const char *script,
               completionHandler:^(id result, NSError *error) {
       if (error)
         NSLog (@"evaluateJavaScript error : %@", error.localizedDescription);
-      else if (result)
+      else if (result && FUNCTIONP (fun))
         {
           /* I assumed `result' actual instance type is objc types
              corresponding javascript types translated by webview or
