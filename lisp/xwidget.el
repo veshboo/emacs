@@ -345,7 +345,7 @@ function findactiveelement(doc){
 
 "
 
-  "javascript that finds the active element."
+  "Javascript that finds the active element."
   ;; Yes it's ugly, because:
   ;; - there is apparently no way to find the active frame other than recursion
   ;; - the js "for each" construct misbehaved on the "frames" collection
@@ -355,7 +355,7 @@ function findactiveelement(doc){
   )
 
 (defun xwidget-webkit-insert-string ()
-  "Prompt for a string and insert it in the active field in the
+  "Prompt for a string and insert it in the active field in the \
 current webkit widget."
   ;; Read out the string in the field first and provide for edit.
   (interactive)
@@ -583,7 +583,7 @@ For example, use this to display an anchor."
     (message "url: %s" url)))
 
 (defun xwidget-webkit-current-url ()
-  "Get the webkit url and place it on the kill-ring."
+  "Get the webkit url and place it on the `kill-ring'."
   (interactive)
   (xwidget-webkit-execute-script
    (xwidget-webkit-current-session)
@@ -603,7 +603,7 @@ For example, use this to display an anchor."
   (kill-new text))
 
 (defun xwidget-webkit-copy-selection-as-kill ()
-  "Get the webkit selection and put it on the kill-ring."
+  "Get the webkit selection and put it on the `kill-ring'."
   (interactive)
   (xwidget-webkit-get-selection 'xwidget-webkit-kill-text-cb))
 
