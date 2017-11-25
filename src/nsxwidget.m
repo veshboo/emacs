@@ -23,6 +23,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "lisp.h"
 #include "blockinput.h"
 #include "dispextern.h"
+#include "buffer.h"
 #include "frame.h"
 #include "nsterm.h"
 #include "xwidget.h"
@@ -165,6 +166,15 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
 
 - (void)keyDown:(NSEvent *)event
 {
+  Lisp_Object var = Fintern (build_string ("isearch-mode"), Qnil);
+  Lisp_Object val = buffer_local_value (var, Fcurrent_buffer ());
+  if (!EQ (val, Qunbound) && !EQ (val, Qnil))
+    {
+      [self.window makeFirstResponder:self.xw->xv->emacswindow];
+      [self.xw->xv->emacswindow keyDown:event];
+      return;
+    }
+
   [self evaluateJavaScript:@"xwHasFocus()"
          completionHandler:^(id result, NSError *error) {
       if (error)
