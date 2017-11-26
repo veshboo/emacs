@@ -355,7 +355,11 @@ window.find(xwSearchString, false, !xwSearchForward, true, false, true);
                search-forward
                search-repeat
                (regexp-quote string)))
-      (point-min))))
+      ;; Unconditionally avoid 'Failing I-search ...'
+      (if (eq isearch-forward nil)
+          (goto-char (point-max))
+        (goto-char (point-min)))
+      )))
 
 ;;; xwidget webkit session
 
