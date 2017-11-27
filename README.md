@@ -67,17 +67,33 @@ Finder.
 
 * Commands
 
-    * M-x xwidget-webkit-browse-url RET, enter a URL you want visit
+    * `M-x xwidget-webkit-browse-url`, enter a URL you want visit
       including "https://", "http://", "files:///" part
 
-    * C-u M-x xwidget-webkit-browse-url RET, ... does same but using
+    * `C-u M-x xwidget-webkit-browse-url`, ... does same but using
       new session of webkit
 
-* Key mappings (apply when keyboard focus is in Emacs buffer not
-  webkit inside of it, click mode-line to be sure)
+* Key mappings (apply when keyboard focus is not in HTML input text or textarea element, in general)
 
     * space, shift-space, up/down, left/right, delete: Scrolling
 
-    * b, r: backward, reload
+    * b, r, +/-: backward, reload, zoom in/out
+
+    * `C-x 2`, `C-x 3`: Duplicate browsing same page in new horizontal or vertical split window (also using a new session)
+
+    * `C-g`: Give up focus held in HTML input text or textarea element to Emacs
+
+    * `C-s`, `C-r`: `isearch` integration
+
+    * `C-x r m`, `C-x r l`: `bookmark` integration
+
+* Use `xwidget-webkit-browse-url` as the `browse-url`
+``` emacs-lisp
+;; In ~/.emacs or ~/.emacs.d/init.el
+(setq browse-url-browser-function 'xwidget-webkit-browse-url)
+```
+    * Then, many packages supporting `browse-url` will work with xwidget webkit
+
+    * For example, try `C-c C-c p` if you are using `markdown-preview`.
 
 * Write elisp using `lisp/xwidget.el` to your task
