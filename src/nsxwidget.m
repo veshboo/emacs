@@ -332,7 +332,10 @@ nsxwidget_webkit_execute_script (struct xwidget *xw, const char *script,
   [xwWebView evaluateJavaScript:javascriptString
               completionHandler:^(id result, NSError *error) {
       if (error)
-        NSLog (@"evaluateJavaScript error : %@", error.localizedDescription);
+        {
+          NSLog (@"evaluateJavaScript error : %@", error.localizedDescription);
+          NSLog (@"error script=%@", javascriptString);
+        }
       else if (result && FUNCTIONP (fun))
         {
           /* I assumed `result' actual instance type is objc types
