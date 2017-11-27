@@ -263,7 +263,7 @@ XWIDGET instance, XWIDGET-EVENT-TYPE depends on the originating xwidget."
       (defun xwidget-webkit-url-title-cb (url-title)
         "Put URL as text property and change buffer name using TITLE."
         (let ((url (car url-title))
-              (title (cdr url-title)))
+              (title (car (cdr url-title))))
           (xwidget-log "webkit finished loading: '%s' from '%s'" title url)
           (setq buffer-read-only nil)
           (put-text-property 2 3 'URL url)
@@ -444,11 +444,11 @@ current webkit widget."
     (defun xwidget-webkit-insert-string-cb (field)
       "Prompt a string for the FIELD and insert in the active input."
       (let ((str (pcase field
-                   (`[,val "text"]
+                   (`(,val "text")
                     (read-string "Text: " val))
-                   (`[,val "password"]
+                   (`(,val "password")
                     (read-passwd "Password: " nil val))
-                   (`[,val "textarea"]
+                   (`(,val "textarea")
                     (xwidget-webkit-begin-edit-textarea xww val)))))
         (xwidget-webkit-execute-script
          xww
