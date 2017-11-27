@@ -336,7 +336,7 @@ window.find(xwSearchString, false, !xwSearchForward, true, false, true);
 (defun xwidget-webkit-search-fun-function ()
   "Return the function which perform the search in xwidget webkit."
   (lambda (string &optional bound noerror count)
-    (or bound noerror count) ;; Kill warns
+    (ignore bound noerror count)
     (let ((current-length (length string))
           search-forward
           search-repeat)
