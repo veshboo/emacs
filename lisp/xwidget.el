@@ -257,18 +257,23 @@ XWIDGET instance, XWIDGET-EVENT-TYPE depends on the originating xwidget."
     (with-current-buffer (xwidget-buffer xwidget)
 
       ;; @javascript-callback
-      ;; We do not change selected window due to title changes
-      ;; and also do not adjust size to window here, the window
-      ;; can be the mini-buffer window unwantedly.
-      (defun xwidget-webkit-title-cb (title)
-        "Change buffer name using TITLE."
-        (xwidget-log "webkit finished loading: '%s'" title)
-        (rename-buffer (format "*xwidget webkit: %s *" title)))
+      ;; We do not change selected window due to getting to knowing
+      ;; URL and title.  And also do not adjust webkit size to window
+      ;; here, the window can be the mini-buffer window unwantedly.
+      (defun xwidget-webkit-url-title-cb (url-title)
+        "Put URL as text property and change buffer name using TITLE."
+        (let ((url (car url-title))
+              (title (cdr url-title)))
+          (xwidget-log "webkit finished loading: '%s' from '%s'" title url)
+          (setq buffer-read-only nil)
+          (put-text-property 2 3 'URL url)
+          (setq buffer-read-only t)
+          (rename-buffer (format "*xwidget webkit: %s *" title))))
 
       (cond ((eq xwidget-event-type 'load-changed)
              (xwidget-webkit-execute-script
-              xwidget "document.title"
-              'xwidget-webkit-title-cb))
+              xwidget "[document.URL, document.title]"
+              'xwidget-webkit-url-title-cb))
             ((eq xwidget-event-type 'decide-policy)
              (let ((strarg  (nth 3 last-input-event)))
                (if (string-match ".*#\\(.*\\)" strarg)
@@ -278,7 +283,10 @@ XWIDGET instance, XWIDGET-EVENT-TYPE depends on the originating xwidget."
             ((eq xwidget-event-type 'javascript-callback)
              (let ((proc (nth 3 last-input-event))
                    (arg  (nth 4 last-input-event)))
-               (funcall proc arg)))
+               ;; Some javascript return vector as result
+               (if (vectorp arg)
+                   (funcall proc (seq-into arg 'list))
+                 (funcall proc arg))))
             (t (xwidget-log "unhandled event:%s" xwidget-event-type))))))
 
 (defvar bookmark-make-record-function)
@@ -295,12 +303,19 @@ XWIDGET instance, XWIDGET-EVENT-TYPE depends on the originating xwidget."
     ;; Keep track of [vh]scroll when switching buffers
     (image-mode-setup-winprops))
 
+;;; Bookmarks integration
+
+;; We avoid using async `xwidget-webkit-current-url', instead use URL
+;; kept in xwidget webkit as property
 (defun xwidget-webkit-bookmark-make-record ()
   "Integrate Emacs bookmarks with the webkit xwidget."
   (nconc (bookmark-make-record-default t t)
-         `((page     . ,(xwidget-webkit-current-url))
-           (handler  . (lambda (bmk) (browse-url
-                                 (bookmark-prop-get bmk 'page)))))))
+         `((filename . ,(get-text-property 2 'URL))
+           (handler  . (lambda (bmk)
+                         (browse-url
+                          (bookmark-prop-get bmk 'filename))
+                         (switch-to-buffer
+                          (xwidget-buffer (xwidget-webkit-last-session))))))))
 
 ;;; Search text in page
 
