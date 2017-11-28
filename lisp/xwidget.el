@@ -78,6 +78,7 @@ This returns the result of `make-xwidget'."
 ;;; webkit support
 (require 'browse-url)
 (require 'image-mode);;for some image-mode alike functionality
+(require 'seq)
 
 ;;;###autoload
 (defun xwidget-webkit-browse-url (url &optional new-session)
