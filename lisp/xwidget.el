@@ -459,7 +459,8 @@ current webkit widget."
      (concat xwidget-webkit-activeelement-js "
 (function () {
   var res = findactiveelement(document);
-  return [res.value, res.type];
+  if (res)
+    return [res.value, res.type];
 })();")
      'xwidget-webkit-insert-string-cb)))
 
