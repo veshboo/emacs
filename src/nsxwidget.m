@@ -60,7 +60,7 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
 /* xwidget webkit */
 
 @interface XwWebView : WKWebView
-<WKNavigationDelegate, WKUIDelegate>
+<WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler>
 @property struct xwidget *xw;
 @end
 @implementation XwWebView : WKWebView
@@ -83,6 +83,7 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
         @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6)"
         @" AppleWebKit/603.3.8 (KHTML, like Gecko)"
         @" Version/11.0.1 Safari/603.3.8";
+      [scriptor addScriptMessageHandler:self name:@"keyDown"];
       [scriptor addUserScript:[[WKUserScript alloc]
                                 initWithSource:xwScript
                                  injectionTime:
@@ -216,11 +217,24 @@ static NSString *xwScript;
       @"}"
       @"function xwKeyDown(event) {"
       @"  if (event.ctrlKey && event.key == 'g') {"
-      @"    event.target.blur();"
+      @"    window.webkit.messageHandlers.keyDown.postMessage('C-g');"
       @"  }"
       @"}"
       @"document.addEventListener('keydown', xwKeyDown);"
       ;
+}
+
+/* Confirming to WKScriptMessageHandler, listens concerning keyDown in
+   webkit. Currently 'C-g'. */
+- (void)userContentController:(WKUserContentController *)userContentController
+      didReceiveScriptMessage:(WKScriptMessage *)message
+{
+  if ([message.body isEqualToString:@"C-g"]) /* NSTaggedPointerString */
+    {
+      /* Just give up focus, no relay "C-g" to emacs, another "C-g"
+         follows will be handeld by emacs. */
+      [self.window makeFirstResponder:self.xw->xv->emacswindow];
+    }
 }
 
 @end
