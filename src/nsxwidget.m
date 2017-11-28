@@ -101,7 +101,7 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
 }
 #endif
 
--(void)webView:(WKWebView *)webView
+- (void)webView:(WKWebView *)webView
 didFinishNavigation:(WKNavigation *)navigation
 {
   store_xwidget_event_string (self.xw, "load-changed", "");
@@ -198,7 +198,7 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
 }
 
 static NSString *xwScript;
-+(void) initialize
++ (void)initialize
 {
   /* Script to run in webkit as event handler, reports if any element
      obtain or lose keyboard focus through `focusHandler' and throws
