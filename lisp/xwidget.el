@@ -678,16 +678,10 @@ For example, use this to display an anchor."
    "window.getSelection().toString();"
    proc))
 
-;; @javascript-callback
-(defun xwidget-webkit-kill-text-cb (text)
-  "Callback run with javascript result TEXT, put it to `kill-ring'."
-  (kill-new text))
-
 (defun xwidget-webkit-copy-selection-as-kill ()
   "Get the webkit selection and put it on the `kill-ring'."
   (interactive)
-  (xwidget-webkit-get-selection 'xwidget-webkit-kill-text-cb))
-
+  (xwidget-webkit-get-selection #'kill-new))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Xwidget plist management (similar to the process plist functions)
