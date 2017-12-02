@@ -129,12 +129,13 @@ decisionHandler:(void (^)(WKNavigationResponsePolicy))decisionHandler
 {
   if (!navigationResponse.canShowMIMEType)
     {
-      // download using NSURLxxx
+      /* TODO: download using NSURLxxx? */
     }
   decisionHandler (WKNavigationResponsePolicyAllow);
 }
 
-/* No new webview or emacs window for <a ... target="_bkank"> */
+/* No additional new webview or emacs window will be created
+   for <a ... target="_blank"> */
 - (WKWebView *)webView:(WKWebView *)webView
 createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
    forNavigationAction:(WKNavigationAction *)navigationAction
@@ -162,8 +163,10 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
   [super mouseUp:event];
 }
 
-/* Basically emacs window own keyboard control, webview passes
-   keyboard event to emacs, unless input text field has focus */
+/* Basically we want keyboard events handled by emacs unless an input
+   element has focus.  Especially, while incremental search, we set
+   emacs as first responder to avoid focus held in an input element
+   with matching text. */
 
 - (void)keyDown:(NSEvent *)event
 {
@@ -182,7 +185,7 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
         NSLog (@"xwHasFocus: %@", error.localizedDescription);
       else if (result)
         {
-          NSNumber *hasFocus = result; // __NSCFBoolean
+          NSNumber *hasFocus = result; /* __NSCFBoolean */
           if (!hasFocus.boolValue)
             [self.xw->xv->emacswindow keyDown:event];
           else
@@ -194,16 +197,15 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
 - (void)interpretKeyEvents:(NSArray<NSEvent *> *)eventArray
 {
   /* We should do nothing and do not forward (default implementation
-     if we not override here) to let emacswindow collect key events
-     and ask interpretKeyEvents to its superclass */
+     if we not override here) to let emacs collect key events and ask
+     interpretKeyEvents to its superclass */
 }
 
 static NSString *xwScript;
 + (void)initialize
 {
-  /* Script to run in webkit as event handler, reports if any element
-     obtain or lose keyboard focus through `focusHandler' and throws
-     the focus away when `C-g' pressed. */
+  /* Find out if an input element has focus.
+     Message to script message handler when 'C-g' key down. */
   if (!xwScript)
     xwScript =
       @"function xwHasFocus() {"
@@ -232,7 +234,7 @@ static NSString *xwScript;
   if ([message.body isEqualToString:@"C-g"]) /* NSTaggedPointerString */
     {
       /* Just give up focus, no relay "C-g" to emacs, another "C-g"
-         follows will be handeld by emacs. */
+         follows will be handled by emacs. */
       [self.window makeFirstResponder:self.xw->xv->emacswindow];
     }
 }
@@ -248,7 +250,7 @@ nsxwidget_is_web_view (struct xwidget *xw)
     [xw->xwWidget isKindOfClass:WKWebView.class];
 }
 
-/* @Note ATS - application transport security in `Info.plist` or
+/* @Note ATS - application transport security in 'Info.plist' or
    remote pages will not loaded */
 void
 nsxwidget_webkit_goto_uri (struct xwidget *xw, const char *uri)
@@ -265,7 +267,7 @@ nsxwidget_webkit_zoom (struct xwidget *xw, double zoom_change)
 {
   XwWebView *xwWebView = (XwWebView *) xw->xwWidget;
   xwWebView.magnification += zoom_change;
-  // TODO: setMagnification:centeredAtPoint
+  /* TODO: setMagnification:centeredAtPoint */
 }
 
 /* Build lisp string */
@@ -278,7 +280,7 @@ build_string_with_nsstr (NSString *nsstr)
 }
 
 /* Recursively convert an objc native type JavaScript value to a Lisp
-   value.  Mostly copied from GTK xwidget `webkit_js_to_lisp' */
+   value.  Mostly copied from GTK xwidget 'webkit_js_to_lisp' */
 static Lisp_Object
 js_to_lisp (id value)
 {
@@ -290,7 +292,7 @@ js_to_lisp (id value)
     {
       NSNumber *nsnum = (NSNumber *) value;
       char type = nsnum.objCType[0];
-      if (type == 'c') // __NSCFBoolean has type character 'c'
+      if (type == 'c') /* __NSCFBoolean has type character 'c' */
         return nsnum.boolValue? Qt : Qnil;
       else
         {
@@ -298,7 +300,7 @@ js_to_lisp (id value)
             return make_number (nsnum.longValue);
           else if (type == 'f' || type == 'd')
             return make_float (nsnum.doubleValue);
-          // else fall through
+          /* else fall through */
         }
     }
   else if ([value isKindOfClass:NSArray.class])
@@ -319,7 +321,6 @@ js_to_lisp (id value)
       NSArray *keys = nsdict.allKeys;
       ptrdiff_t n = keys.count;
       Lisp_Object obj;
-      /* TODO: can we use a regular list here?  */
       struct Lisp_Vector *p = allocate_vector (n);
 
       for (ptrdiff_t i = 0; i < n; ++i)
@@ -352,9 +353,6 @@ nsxwidget_webkit_execute_script (struct xwidget *xw, const char *script,
         }
       else if (result && FUNCTIONP (fun))
         {
-          /* I assumed `result' actual instance type is objc types
-             corresponding javascript types translated by webview or
-             javascript core. */
           // NSLog (@"result=%@, type=%@", result, [result class]);
           Lisp_Object lisp_value = js_to_lisp (result);
           store_xwidget_js_callback_event (xw, fun, lisp_value);
@@ -362,7 +360,7 @@ nsxwidget_webkit_execute_script (struct xwidget *xw, const char *script,
     }];
 }
 
-/* window contains xwidget */
+/* window containing an xwidget */
 
 @implementation XwWindow
 - (BOOL)isFlipped { return YES; }
@@ -397,7 +395,7 @@ nsxwidget_kill (struct xwidget *xw)
       [scriptor removeScriptMessageHandlerForName:@"focusHandler"];
       [scriptor release];
       if (xw->xv)
-        xw->xv->model = Qnil; // Make sure related view stale
+        xw->xv->model = Qnil; /* Make sure related view stale */
       [xw->xwWidget removeFromSuperviewWithoutNeedingDisplay];
       [xw->xwWidget release];
       [xw->xwWindow removeFromSuperviewWithoutNeedingDisplay];
@@ -435,7 +433,7 @@ nsxwidget_init_view (struct xwidget_view *xv,
                      struct glyph_string *s,
                      int x, int y)
 {
-  /* `nsxwidget_draw_glyph' below will calculate correct position and
+  /* 'x_draw_xwidget_glyph_string' will calculate correct position and
      size of clip to draw in emacs buffer window. Thus, just begin at
      origin with no crop. */
   xv->x = x;
