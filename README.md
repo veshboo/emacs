@@ -87,13 +87,46 @@ Finder.
 
     * `C-x r m`, `C-x r l`: `bookmark` integration
 
+## Example customization using xwidget webkit
+
 * Use `xwidget-webkit-browse-url` as the `browse-url`
 ``` emacs-lisp
 ;; In ~/.emacs or ~/.emacs.d/init.el
 (setq browse-url-browser-function 'xwidget-webkit-browse-url)
 ```
+
     * Then, many packages supporting `browse-url` will work with xwidget webkit
 
     * For example, try `C-c C-c p` if you are using `markdown-preview`.
+
+* `search-web` with xwidget webkit
+``` emacs-lisp
+(require 'search-web)
+(global-set-key (kbd "C-c w") 'search-web)
+(defun browse-url-default-browser (url &rest args)
+  "Override `browse-url-default-browser' to use `xwidget-webkit' URL ARGS."
+  (xwidget-webkit-browse-url url args))
+```
+
+* Browse to a URL bookmark from `*Bookmark List*`
+``` emacs-lisp
+(defvar xwidget-webkit-bookmark-jump-new-session) ;; xwidget.el
+(defvar xwidget-webkit-last-session-buffer) ;; xwidget.el
+(add-hook 'pre-command-hook
+          (lambda ()
+            (if (eq this-command #'bookmark-bmenu-list)
+                (if (not (eq major-mode 'xwidget-webkit-mode))
+                    (setq xwidget-webkit-bookmark-jump-new-session t)
+                  (setq xwidget-webkit-bookmark-jump-new-session nil)
+                  (setq xwidget-webkit-last-session-buffer (current-buffer))))))
+```
+
+    * `RET` on a URL bookmark will show the page in the window with
+      current `*Bookmark List*`
+
+    * It will create a new `xwidget-webkit-mode` buffer if the
+      previous buffer in the selected window is not a
+      `xwidget-webkit-mode`.  Otherwise, it will browse in the
+      previous `xwidget-webkit-mode` buffer.
 
 * Write elisp using `lisp/xwidget.el` to your task
