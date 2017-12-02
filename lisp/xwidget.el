@@ -306,6 +306,13 @@ XWIDGET instance, XWIDGET-EVENT-TYPE depends on the originating xwidget."
 
 ;;; Bookmarks integration
 
+(defvar xwidget-webkit-bookmark-jump-new-session nil
+  "Control bookmark jump to use new session or not.
+If non-nil, it will use a new session.  Otherwise, it will use
+`xwidget-webkit-last-session'.  When you set this variable to
+nil, consider further customization with
+`xwidget-webkit-last-session-buffer'.")
+
 ;; We avoid using async `xwidget-webkit-current-url', instead use URL
 ;; kept in xwidget webkit as property
 (defun xwidget-webkit-bookmark-make-record ()
@@ -314,7 +321,8 @@ XWIDGET instance, XWIDGET-EVENT-TYPE depends on the originating xwidget."
          `((filename . ,(get-text-property 2 'URL))
            (handler  . (lambda (bmk)
                          (browse-url
-                          (bookmark-prop-get bmk 'filename))
+                          (bookmark-prop-get bmk 'filename)
+                          xwidget-webkit-bookmark-jump-new-session)
                          (switch-to-buffer
                           (xwidget-buffer (xwidget-webkit-last-session))))))))
 
