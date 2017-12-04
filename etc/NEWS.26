@@ -366,7 +366,7 @@ These local variables will thus not vanish on setting a major mode.
 
 +++
 ** A second dir-local file (.dir-locals-2.el) is now accepted.
-See the variable 'dir-locals-file-2' for more information.
+See the doc string of 'dir-locals-file' for more information.
 
 +++
 ** Connection-local variables can be used to specify local variables
@@ -1137,11 +1137,6 @@ domain.
 string is computed dynamically based on 'url-privacy-level'.
 
 ** VC and related modes
-
----
-*** The VC state indicator in the mode line now defaults to more
-colorful faces to make it more obvious to the user what the state is.
-See the 'vc-faces' customization group.
 
 +++
 *** 'vc-dir-mode' now binds 'vc-log-outgoing' to 'O'; and has various

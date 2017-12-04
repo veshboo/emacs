@@ -994,7 +994,8 @@ If EXTERNAL, browse the URL using `shr-external-browser'."
 	 data)
     (let ((param (match-string 4 data))
 	  (payload (url-unhex-string (match-string 5 data))))
-      (when (string-match "^.*\\(;[ \t]*base64\\)$" param)
+      (when (and param
+                 (string-match "^.*\\(;[ \t]*base64\\)$" param))
 	(setq payload (ignore-errors
                         (base64-decode-string payload))))
       payload)))
@@ -2289,8 +2290,10 @@ flags that control whether to collect or render objects."
 				  (<= (car (cdr attr)) width))
 			 (setq result (cdr attr)))))))
 	       result))
-	(let ((result (shr-render-td-1 dom width fill)))
+	(let* ((pt (point))
+               (result (shr-render-td-1 dom width fill)))
 	  (dom-set-attribute dom cache result)
+          (goto-char pt)
 	  result))))
 
 (defun shr-render-td-1 (dom width fill)

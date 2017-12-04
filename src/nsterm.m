@@ -3182,18 +3182,54 @@ ns_draw_window_divider (struct window *w, int x0, int x1, int y0, int y1)
    -------------------------------------------------------------------------- */
 {
   struct frame *f = XFRAME (WINDOW_FRAME (w));
-  struct face *face;
-  NSRect r = NSMakeRect (x0, y0, x1-x0, y1-y0);
+  struct face *face = FACE_FROM_ID_OR_NULL (f, WINDOW_DIVIDER_FACE_ID);
+  struct face *face_first
+    = FACE_FROM_ID_OR_NULL (f, WINDOW_DIVIDER_FIRST_PIXEL_FACE_ID);
+  struct face *face_last
+    = FACE_FROM_ID_OR_NULL (f, WINDOW_DIVIDER_LAST_PIXEL_FACE_ID);
+  unsigned long color = face ? face->foreground : FRAME_FOREGROUND_PIXEL (f);
+  unsigned long color_first = (face_first
+			       ? face_first->foreground
+			       : FRAME_FOREGROUND_PIXEL (f));
+  unsigned long color_last = (face_last
+			      ? face_last->foreground
+			      : FRAME_FOREGROUND_PIXEL (f));
+  NSRect divider = NSMakeRect (x0, y0, x1-x0, y1-y0);
 
   NSTRACE ("ns_draw_window_divider");
 
-  face = FACE_FROM_ID_OR_NULL (f, WINDOW_DIVIDER_FACE_ID);
+  ns_focus (f, &divider, 1);
 
-  ns_focus (f, &r, 1);
-  if (face)
-    [ns_lookup_indexed_color(face->foreground, f) set];
+  if ((y1 - y0 > x1 - x0) && (x1 - x0 >= 3))
+    /* A vertical divider, at least three pixels wide: Draw first and
+       last pixels differently.  */
+    {
+      [ns_lookup_indexed_color(color_first, f) set];
+      NSRectFill(NSMakeRect (x0, y0, 1, y1 - y0));
+      [ns_lookup_indexed_color(color, f) set];
+      NSRectFill(NSMakeRect (x0 + 1, y0, x1 - x0 - 2, y1 - y0));
+      [ns_lookup_indexed_color(color_last, f) set];
+      NSRectFill(NSMakeRect (x1 - 1, y0, 1, y1 - y0));
+    }
+  else if ((x1 - x0 > y1 - y0) && (y1 - y0 >= 3))
+    /* A horizontal divider, at least three pixels high: Draw first and
+       last pixels differently.  */
+    {
+      [ns_lookup_indexed_color(color_first, f) set];
+      NSRectFill(NSMakeRect (x0, y0, x1 - x0, 1));
+      [ns_lookup_indexed_color(color, f) set];
+      NSRectFill(NSMakeRect (x0, y0 + 1, x1 - x0, y1 - y0 - 2));
+      [ns_lookup_indexed_color(color_last, f) set];
+      NSRectFill(NSMakeRect (x0, y1 - 1, x1 - x0, 1));
+    }
+  else
+    {
+      /* In any other case do not draw the first and last pixels
+         differently.  */
+      [ns_lookup_indexed_color(color, f) set];
+      NSRectFill(divider);
+    }
 
-  NSRectFill(r);
   ns_unfocus (f);
 }
 
@@ -8107,8 +8143,6 @@ not_in_argv (NSString *arg)
           emacs_event->kind = DRAG_N_DROP_EVENT;
           XSETINT (emacs_event->x, x);
           XSETINT (emacs_event->y, y);
-          ns_input_file = append2 (ns_input_file,
-                                   build_string ([file UTF8String]));
           emacs_event->modifiers = modifiers;
           emacs_event->arg =  list2 (Qfile, build_string ([file UTF8String]));
           EV_TRAILER (theEvent);
@@ -9132,9 +9166,9 @@ ns_xlfd_to_fontname (const char *xlfd)
   const char *ret;
 
   if (!strncmp (xlfd, "--", 2))
-    sscanf (xlfd, "--%*[^-]-%[^-]179-", name);
+    sscanf (xlfd, "--%*[^-]-%179[^-]-", name);
   else
-    sscanf (xlfd, "-%*[^-]-%[^-]179-", name);
+    sscanf (xlfd, "-%*[^-]-%179[^-]-", name);
 
   /* stopgap for malformed XLFD input */
   if (strlen (name) == 0)

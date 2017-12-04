@@ -1685,6 +1685,10 @@ This checks also `file-name-as-directory', `file-name-directory',
     "/method:host:/path/to/file"))
   (should
    (string-equal
+    (directory-file-name "/method:host:/path/to/file//")
+    "/method:host:/path/to/file"))
+  (should
+   (string-equal
     (file-name-as-directory "/method:host:/path/to/file")
     "/method:host:/path/to/file/"))
   (should
@@ -2313,6 +2317,14 @@ This tests also `file-directory-p' and `file-accessible-directory-p'."
 	      (insert-directory tmp-name1 nil)
 	      (goto-char (point-min))
 	      (should (looking-at-p (regexp-quote tmp-name1))))
+	    ;; This has been fixed in Emacs 26.1.  See Bug#29423.
+	    (when (tramp--test-emacs26-p)
+	      (with-temp-buffer
+	        (insert-directory (file-name-as-directory tmp-name1) nil)
+	        (goto-char (point-min))
+	        (should
+                 (looking-at-p
+                  (regexp-quote (file-name-as-directory tmp-name1))))))
 	    (with-temp-buffer
 	      (insert-directory tmp-name1 "-al")
 	      (goto-char (point-min))
@@ -2333,7 +2345,10 @@ This tests also `file-directory-p' and `file-accessible-directory-p'."
 		 ;; There might be a summary line.
 		 "\\(total.+[[:digit:]]+\n\\)?"
 		 ;; We don't know in which order ".", ".." and "foo" appear.
-		 "\\(.+ \\(\\.?\\.\\|foo\\)\n\\)\\{3\\}")))))
+		 (format
+		  "\\(.+ %s\\( ->.+\\)?\n\\)\\{%d\\}"
+		  (regexp-opt (directory-files tmp-name1))
+		  (length (directory-files tmp-name1))))))))
 
 	;; Cleanup.
 	(ignore-errors (delete-directory tmp-name1 'recursive))))))
@@ -3619,11 +3634,8 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
   (skip-unless (tramp--test-enabled))
   ;; We test it only for the mock-up connection; otherwise there might
   ;; be problems with the used ports.
-  (skip-unless
-   (and
-    (eq tramp-syntax 'default)
-    (string-equal
-     "mock" (file-remote-p tramp-test-temporary-file-directory 'method))))
+  (skip-unless (and (eq tramp-syntax 'default)
+                    (tramp--test-mock-p)))
 
   ;; We force a reconnect, in order to have a clean environment.
   (dolist (dir `(,tramp-test-temporary-file-directory
@@ -4033,6 +4045,12 @@ Several special characters do not work properly there."
       (file-truename tramp-test-temporary-file-directory) nil
     (string-match "^HP-UX" (tramp-get-connection-property v "uname" ""))))
 
+(defun tramp--test-mock-p ()
+  "Check, whether the mock method is used.
+This does not support external Emacs calls."
+  (string-equal
+   "mock" (file-remote-p tramp-test-temporary-file-directory 'method)))
+
 (defun tramp--test-rsync-p ()
   "Check, whether the rsync method is used.
 This does not support special file names."
@@ -4434,8 +4452,8 @@ Use the `ls' command."
   ;; Since Emacs 27.1.
   (skip-unless (fboundp 'file-system-info))
 
-  ;; `file-system-info' exists since Emacs 27.  We don't
-  ;; want to see compiler warnings for older Emacsen.
+  ;; `file-system-info' exists since Emacs 27.  We don't want to see
+  ;; compiler warnings for older Emacsen.
   (let ((fsi (with-no-warnings
 	       (file-system-info tramp-test-temporary-file-directory))))
     (skip-unless fsi)
@@ -4488,8 +4506,7 @@ process sentinels.  They shall not disturb each other."
            ;; We must distinguish due to performance reasons.
            (timer-operation
             (cond
-             ((string-equal "mock" (file-remote-p tmp-name 'method))
-              'vc-registered)
+             ((tramp--test-mock-p) 'vc-registered)
              (t 'file-attributes)))
            timer buffers kill-buffer-query-functions)
 
@@ -4607,6 +4624,52 @@ process sentinels.  They shall not disturb each other."
         (ignore-errors (cancel-timer timer))
         (ignore-errors (delete-directory tmp-name 'recursive)))))))
 
+;; This test is inspired by Bug#29163.
+(ert-deftest tramp-test42-auto-load ()
+  "Check that Tramp autoloads properly."
+  (let ((default-directory (expand-file-name temporary-file-directory))
+	(code
+	 (format
+	  "(message \"Tramp loaded: %%s\" (and (file-remote-p %S) t))"
+	  tramp-test-temporary-file-directory)))
+    (should
+     (string-match
+      "Tramp loaded: t[\n\r]+"
+      (shell-command-to-string
+       (format
+	"%s -batch -Q -L %s --eval %s"
+	(expand-file-name invocation-name invocation-directory)
+	(mapconcat 'shell-quote-argument load-path " -L ")
+	(shell-quote-argument code)))))))
+
+(ert-deftest tramp-test42-delay-load ()
+  "Check that Tramp is loaded lazily, only when needed."
+  ;; Tramp is neither loaded at Emacs startup, nor when completing a
+  ;; non-Tramp file name like "/foo".  Completing a Tramp-alike file
+  ;; name like "/foo:" autoloads Tramp, when `tramp-mode' is t.
+  (let ((default-directory (expand-file-name temporary-file-directory))
+	(code
+	 "(progn \
+           (setq tramp-mode %s) \
+	   (message \"Tramp loaded: %%s\" (featurep 'tramp)) \
+	   (file-name-all-completions \"/foo\" \"/\") \
+	   (message \"Tramp loaded: %%s\" (featurep 'tramp)) \
+	   (file-name-all-completions \"/foo:\" \"/\") \
+	   (message \"Tramp loaded: %%s\" (featurep 'tramp)))"))
+    ;; Tramp doesn't load when `tramp-mode' is nil since Emacs 26.1.
+    (dolist (tm (if (tramp--test-emacs26-p) '(t nil) '(nil)))
+      (should
+       (string-match
+	(format
+       "Tramp loaded: nil[\n\r]+Tramp loaded: nil[\n\r]+Tramp loaded: %s[\n\r]+"
+	 tm)
+	(shell-command-to-string
+	 (format
+	  "%s -batch -Q -L %s --eval %s"
+	  (expand-file-name invocation-name invocation-directory)
+	  (mapconcat 'shell-quote-argument load-path " -L ")
+	  (shell-quote-argument (format code tm)))))))))
+
 (ert-deftest tramp-test42-recursive-load ()
   "Check that Tramp does not fail due to recursive load."
   (skip-unless (tramp--test-enabled))
@@ -4630,7 +4693,7 @@ process sentinels.  They shall not disturb each other."
 	  (mapconcat 'shell-quote-argument load-path " -L ")
 	  (shell-quote-argument code))))))))
 
-(ert-deftest tramp-test43-remote-load-path ()
+(ert-deftest tramp-test42-remote-load-path ()
   "Check that Tramp autoloads its packages with remote `load-path'."
   ;; `tramp-cleanup-all-connections' is autoloaded from tramp-cmds.el.
   ;; It shall still work, when a remote file name is in the
@@ -4653,34 +4716,7 @@ process sentinels.  They shall not disturb each other."
 	(mapconcat 'shell-quote-argument load-path " -L ")
 	(shell-quote-argument code)))))))
 
-(ert-deftest tramp-test44-delay-load ()
-  "Check that Tramp is loaded lazily, only when needed."
-  ;; Tramp is neither loaded at Emacs startup, nor when completing a
-  ;; non-Tramp file name like "/foo".  Completing a Tramp-alike file
-  ;; name like "/foo:" autoloads Tramp, when `tramp-mode' is t.
-  (let ((code
-	 "(progn \
-           (setq tramp-mode %s) \
-	   (message \"Tramp loaded: %%s\" (featurep 'tramp)) \
-	   (file-name-all-completions \"/foo\" \"/\") \
-	   (message \"Tramp loaded: %%s\" (featurep 'tramp)) \
-	   (file-name-all-completions \"/foo:\" \"/\") \
-	   (message \"Tramp loaded: %%s\" (featurep 'tramp)))"))
-    ;; Tramp doesn't load when `tramp-mode' is nil since Emacs 26.1.
-    (dolist (tm (if (tramp--test-emacs26-p) '(t nil) '(nil)))
-      (should
-       (string-match
-	(format
-       "Tramp loaded: nil[\n\r]+Tramp loaded: nil[\n\r]+Tramp loaded: %s[\n\r]+"
-	 tm)
-	(shell-command-to-string
-	 (format
-	  "%s -batch -Q -L %s --eval %s"
-	  (expand-file-name invocation-name invocation-directory)
-	  (mapconcat 'shell-quote-argument load-path " -L ")
-	  (shell-quote-argument (format code tm)))))))))
-
-(ert-deftest tramp-test45-unload ()
+(ert-deftest tramp-test43-unload ()
   "Check that Tramp and its subpackages unload completely.
 Since it unloads Tramp, it shall be the last test to run."
   :tags '(:expensive-test)
@@ -4726,6 +4762,12 @@ Since it unloads Tramp, it shall be the last test to run."
 	    (ignore-errors (all-completions "tramp" (symbol-value x)))
 	    (ert-fail (format "Hook `%s' still contains Tramp function" x)))))))
 
+(defun tramp-test-all (&optional interactive)
+  "Run all tests for \\[tramp]."
+  (interactive "p")
+  (funcall
+   (if interactive 'ert-run-tests-interactively 'ert-run-tests-batch) "^tramp"))
+
 ;; TODO:
 
 ;; * dired-compress-file
@@ -4738,12 +4780,6 @@ Since it unloads Tramp, it shall be the last test to run."
 ;; * Fix `tramp-test29-start-file-process' on MS Windows (`process-send-eof'?).
 ;; * Fix `tramp-test30-interrupt-process', timeout doesn't work reliably.
 ;; * Fix Bug#16928 in `tramp-test41-asynchronous-requests'.
-
-(defun tramp-test-all (&optional interactive)
-  "Run all tests for \\[tramp]."
-  (interactive "p")
-  (funcall
-   (if interactive 'ert-run-tests-interactively 'ert-run-tests-batch) "^tramp"))
 
 (provide 'tramp-tests)
 ;;; tramp-tests.el ends here
