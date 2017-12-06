@@ -2737,7 +2737,7 @@ if test "$with_xwidgets" != "no"; then
     dnl Update NS_OBJC_OBJ with added nsxwidget.o
     AC_SUBST(NS_OBJC_OBJ)
   else
-    AC_MSG_ERROR([xwidgets requested, it requires GTK3 as X window toolkit or macOS Cocoa as window systeml])
+    AC_MSG_ERROR([xwidgets requested, it requires GTK3 as X window toolkit or macOS Cocoa as window system.])
   fi
 
   test $HAVE_XWIDGETS = yes ||
