@@ -395,6 +395,11 @@ nsxwidget_kill (struct xwidget *xw)
       [scriptor release];
       if (xw->xv)
         xw->xv->model = Qnil; /* Make sure related view stale.  */
+
+      /* This stops playing audio when a xwidget-webkit buffer is
+         killed.  I could not find other solution.  */
+      nsxwidget_webkit_goto_uri (xw, "about:blank");
+
       [xw->xwWidget removeFromSuperviewWithoutNeedingDisplay];
       [xw->xwWidget release];
       [xw->xwWindow removeFromSuperviewWithoutNeedingDisplay];
