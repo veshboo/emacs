@@ -112,7 +112,8 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
 - (void)webView:(WKWebView *)webView
 didFinishNavigation:(WKNavigation *)navigation
 {
-  store_xwidget_event_string (self.xw, "load-changed", "");
+  if (EQ (Fbuffer_live_p (self.xw->buffer), Qt))
+    store_xwidget_event_string (self.xw, "load-changed", "");
 }
 
 - (void)webView:(WKWebView *)webView
