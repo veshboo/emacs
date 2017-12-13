@@ -61,6 +61,9 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
 @interface XwWebView : WKWebView
 <WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler>
 @property struct xwidget *xw;
+/* Map url to whether javascript is blocked by
+   'Content-Security-Policy' sandbox without allow-scripts.  */
+@property(retain) NSMutableDictionary *urlScriptBlocked;
 @end
 @implementation XwWebView : WKWebView
 
@@ -72,10 +75,15 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
   WKUserContentController *scriptor = [[WKUserContentController alloc] init];
   configuration.userContentController = scriptor;
 
+  /* Enable inspect element context menu item for debugging.  */
+  [configuration.preferences setValue:@YES
+                               forKey:@"developerExtrasEnabled"];
+
   self = [super initWithFrame:frame configuration:configuration];
   if (self)
     {
       self.xw = xw;
+      self.urlScriptBlocked = [[NSMutableDictionary alloc] init];
       self.navigationDelegate = self;
       self.UIDelegate = self;
       self.customUserAgent =
@@ -86,7 +94,7 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
       [scriptor addUserScript:[[WKUserScript alloc]
                                 initWithSource:xwScript
                                  injectionTime:
-                                  WKUserScriptInjectionTimeAtDocumentEnd
+                                  WKUserScriptInjectionTimeAtDocumentStart
                                 forMainFrameOnly:NO]];
     }
   return self;
@@ -131,6 +139,28 @@ decisionHandler:(void (^)(WKNavigationResponsePolicy))decisionHandler
       /* TODO: download using NSURLxxx?  */
     }
   decisionHandler (WKNavigationResponsePolicyAllow);
+
+  self.urlScriptBlocked[navigationResponse.response.URL] =
+    [NSNumber numberWithBool:NO];
+  if ([navigationResponse.response isKindOfClass:[NSHTTPURLResponse class]])
+    {
+      NSDictionary *headers =
+        ((NSHTTPURLResponse *) navigationResponse.response).allHeaderFields;
+      NSString *value = headers[@"Content-Security-Policy"];
+      if (value)
+        {
+          /* TODO: Sloppy parsing of 'Content-Security-Policy' value.  */
+          NSRange sandbox = [value rangeOfString:@"sandbox"];
+          if (sandbox.location != NSNotFound)
+            {
+              NSRange allowScripts = [value rangeOfString:@"allow-scripts"];
+              if (allowScripts.location == NSNotFound
+                  || allowScripts.location < sandbox.location)
+                self.urlScriptBlocked[navigationResponse.response.URL] =
+                  [NSNumber numberWithBool:YES];
+            }
+        }
+    }
 }
 
 /* No additional new webview or emacs window will be created
@@ -178,10 +208,20 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
       return;
     }
 
+  /* Emacs handles keyboard events when javascript is blocked.  */
+  if ([self.urlScriptBlocked[self.URL] boolValue])
+    {
+      [self.xw->xv->emacswindow keyDown:event];
+      return;
+    }
+
   [self evaluateJavaScript:@"xwHasFocus()"
          completionHandler:^(id result, NSError *error) {
       if (error)
-        NSLog (@"xwHasFocus: %@", error.localizedDescription);
+        {
+          NSLog (@"xwHasFocus: %@", error);
+          [self.xw->xv->emacswindow keyDown:event];
+        }
       else if (result)
         {
           NSNumber *hasFocus = result; /* __NSCFBoolean */
@@ -242,11 +282,27 @@ static NSString *xwScript;
 
 /* Xwidget webkit commands.  */
 
+static Lisp_Object build_string_with_nsstr (NSString *nsstr);
+
 bool
 nsxwidget_is_web_view (struct xwidget *xw)
 {
   return xw->xwWidget != NULL &&
     [xw->xwWidget isKindOfClass:WKWebView.class];
+}
+
+Lisp_Object
+nsxwidget_webkit_uri (struct xwidget *xw)
+{
+  XwWebView *xwWebView = (XwWebView *) xw->xwWidget;
+  return build_string_with_nsstr (xwWebView.URL.absoluteString);
+}
+
+Lisp_Object
+nsxwidget_webkit_title (struct xwidget *xw)
+{
+  XwWebView *xwWebView = (XwWebView *) xw->xwWidget;
+  return build_string_with_nsstr (xwWebView.title);
 }
 
 /* @Note ATS - Need application transport security in 'Info.plist' or
@@ -259,6 +315,17 @@ nsxwidget_webkit_goto_uri (struct xwidget *xw, const char *uri)
   NSURL *url = [NSURL URLWithString:urlString];
   NSURLRequest *urlRequest = [NSURLRequest requestWithURL:url];
   [xwWebView loadRequest:urlRequest];
+}
+
+void
+nsxwidget_webkit_goto_history (struct xwidget *xw, int rel_pos)
+{
+  XwWebView *xwWebView = (XwWebView *) xw->xwWidget;
+  switch (rel_pos) {
+  case -1: [xwWebView goBack]; break;
+  case 0: [xwWebView reload]; break;
+  case 1: [xwWebView goForward]; break;
+  }
 }
 
 void
@@ -340,9 +407,14 @@ void
 nsxwidget_webkit_execute_script (struct xwidget *xw, const char *script,
                                  Lisp_Object fun)
 {
-  NSString *javascriptString = [NSString stringWithUTF8String:script];
   XwWebView *xwWebView = (XwWebView *) xw->xwWidget;
+  if ([xwWebView.urlScriptBlocked[xwWebView.URL] boolValue])
+    {
+      message ("Javascript is blocked by 'CSP: sandbox'.");
+      return;
+    }
 
+  NSString *javascriptString = [NSString stringWithUTF8String:script];
   [xwWebView evaluateJavaScript:javascriptString
               completionHandler:^(id result, NSError *error) {
       if (error)
@@ -400,6 +472,7 @@ nsxwidget_kill (struct xwidget *xw)
          killed.  I could not find other solution.  */
       nsxwidget_webkit_goto_uri (xw, "about:blank");
 
+      [((XwWebView *) xw->xwWidget).urlScriptBlocked release];
       [xw->xwWidget removeFromSuperviewWithoutNeedingDisplay];
       [xw->xwWidget release];
       [xw->xwWindow removeFromSuperviewWithoutNeedingDisplay];
