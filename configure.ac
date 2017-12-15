@@ -399,7 +399,7 @@ otherwise for the first of 'inotify', 'kqueue' or 'gfile' that is usable.])
  [with_file_notification=$with_features])
 
 OPTION_DEFAULT_OFF([xwidgets],
-  [enable use of some gtk widgets in Emacs buffers (requires gtk3 or NS)])
+  [enable use of some gtk widgets in Emacs buffers (requires gtk3 or macOS Cocoa)])
 
 ## For the times when you want to build Emacs but don't have
 ## a suitable makeinfo, and can live without the manuals.
@@ -2715,7 +2715,7 @@ fi
 
 
 dnl Enable xwidgets if GTK3 and WebKitGTK+ are available.
-dnl Enable xwidgets if NS Cocoa and WebKit framework are available.
+dnl Enable xwidgets if macOS Cocoa and WebKit framework are available.
 HAVE_XWIDGETS=no
 XWIDGETS_OBJ=
 if test "$with_xwidgets" != "no"; then
@@ -2725,7 +2725,7 @@ if test "$with_xwidgets" != "no"; then
     EMACS_CHECK_MODULES([WEBKIT], [$WEBKIT_MODULES])
     HAVE_XWIDGETS=$HAVE_WEBKIT
     XWIDGETS_OBJ="xwidget.o"
-  elif test "$window_system" = "nextstep"; then
+  elif test "${NS_IMPL_COCOA}" = "yes"; then
     dnl FIXME: Check framework WebKit2
     dnl WEBKIT_REQUIRED=M.m.p
     WEBKIT_LIBS="-Wl,-framework -Wl,WebKit"
@@ -2737,7 +2737,7 @@ if test "$with_xwidgets" != "no"; then
     dnl Update NS_OBJC_OBJ with added nsxwidget.o
     AC_SUBST(NS_OBJC_OBJ)
   else
-    AC_MSG_ERROR([xwidgets requested, it requires GTK3 as X window toolkit or Nextstep as window systeml])
+    AC_MSG_ERROR([xwidgets requested, it requires GTK3 as X window toolkit or macOS Cocoa as window system.])
   fi
 
   test $HAVE_XWIDGETS = yes ||
@@ -5433,7 +5433,8 @@ AS_ECHO(["  Does Emacs use -lXaw3d?                                 ${HAVE_XAW3D
   Does Emacs directly use zlib?                           ${HAVE_ZLIB}
   Does Emacs have dynamic modules support?                ${HAVE_MODULES}
   Does Emacs use toolkit scroll bars?                     ${USE_TOOLKIT_SCROLL_BARS}
-  Does Emacs support Xwidgets (requires gtk3 or NS)?      ${HAVE_XWIDGETS}
+  Does Emacs support Xwidgets?                            ${HAVE_XWIDGETS}
+    (requires gtk3 or macOS Cocoa)
   Does Emacs have threading support in lisp?              ${threads_enabled}
 "])
 

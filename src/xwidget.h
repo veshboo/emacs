@@ -32,7 +32,7 @@ struct window;
 
 #if defined (USE_GTK)
 #include <gtk/gtk.h>
-#elif defined (HAVE_NS) && defined (__OBJC__)
+#elif defined (NS_IMPL_COCOA) && defined (__OBJC__)
 #import <AppKit/NSView.h>
 #import "nsxwidget.h"
 #endif
@@ -62,14 +62,14 @@ struct xwidget
   /* For offscreen widgets, unused if not osr.  */
   GtkWidget *widget_osr;
   GtkWidget *widgetwindow_osr;
-#elif defined (HAVE_NS)
+#elif defined (NS_IMPL_COCOA)
 # ifdef __OBJC__
   /* For offscreen widgets, unused if not osr.  */
   NSView *xwWidget;
   XwWindow *xwWindow;
 
   /* Used only for xwidget types (such as webkit2) enforcing 1 to 1
-     relationship between model and view. */
+     relationship between model and view.  */
   struct xwidget_view *xv;
 # else
   void *xwWidget;
@@ -100,7 +100,7 @@ struct xwidget_view
   GtkWidget *widget;
   GtkWidget *widgetwindow;
   GtkWidget *emacswindow;
-#elif defined (HAVE_NS)
+#elif defined (NS_IMPL_COCOA)
 # ifdef __OBJC__
   XvWindow *xvWindow;
   NSView *emacswindow;

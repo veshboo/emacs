@@ -20,7 +20,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #ifndef NSXWIDGET_H_INCLUDED
 #define NSXWIDGET_H_INCLUDED
 
-/* This file can be included from non-objc files through `xwidget.h' */
+/* This file can be included from non-objc files through 'xwidget.h'.  */
 #ifdef __OBJC__
 #import <AppKit/NSView.h>
 #endif
@@ -29,15 +29,18 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "lisp.h"
 #include "xwidget.h"
 
-/* webkit */
+/* Functions for xwidget webkit.  */
 
 bool nsxwidget_is_web_view (struct xwidget *xw);
+Lisp_Object nsxwidget_webkit_uri (struct xwidget *xw);
+Lisp_Object nsxwidget_webkit_title (struct xwidget *xw);
 void nsxwidget_webkit_goto_uri (struct xwidget *xw, const char *uri);
+void nsxwidget_webkit_goto_history (struct xwidget *xw, int rel_pos);
 void nsxwidget_webkit_zoom (struct xwidget *xw, double zoom_change);
 void nsxwidget_webkit_execute_script (struct xwidget *xw, const char *script,
                                       Lisp_Object fun);
 
-/* xw: model */
+/* Functions for xwidget model.  */
 
 #ifdef __OBJC__
 @interface XwWindow : NSView
@@ -50,7 +53,7 @@ void nsxwidget_kill (struct xwidget *xw);
 void nsxwidget_resize (struct xwidget *xw);
 Lisp_Object nsxwidget_get_size (struct xwidget *xw);
 
-/* xv: view */
+/* Functions for xwidget view.  */
 
 #ifdef __OBJC__
 @interface XvWindow : NSView

@@ -2448,7 +2448,7 @@ note_mouse_movement (struct frame *frame, CGFloat x, CGFloat y, BOOL dragging)
 
   /* If the last rect is too large (ex, xwidget webkit), update at
      every move, or resizing by dragging modeline or vertical split is
-     very hard to make its way. */
+     very hard to make its way.  */
   if (dragging && (r->size.width > 32 || r->size.height > 32))
     force_update = YES;
 

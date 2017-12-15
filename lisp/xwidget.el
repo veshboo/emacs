@@ -39,9 +39,14 @@
 (declare-function xwidget-buffer "xwidget.c" (xwidget))
 (declare-function xwidget-size-request "xwidget.c" (xwidget))
 (declare-function xwidget-resize "xwidget.c" (xwidget new-width new-height))
+;; @callback - Prefer defun to lambda, not to be garbage collected
+;; before its execution in `xwidget-webkit-callback'.
 (declare-function xwidget-webkit-execute-script "xwidget.c"
                   (xwidget script &optional callback))
+(declare-function xwidget-webkit-uri "xwidget.c" (xwidget))
+(declare-function xwidget-webkit-title "xwidget.c" (xwidget))
 (declare-function xwidget-webkit-goto-uri "xwidget.c" (xwidget uri))
+(declare-function xwidget-webkit-goto-history "xwidget.c" (xwidget rel-pos))
 (declare-function xwidget-webkit-zoom "xwidget.c" (xwidget factor))
 (declare-function xwidget-plist "xwidget.c" (xwidget))
 (declare-function set-xwidget-plist "xwidget.c" (xwidget plist))
@@ -97,37 +102,21 @@ Interactively, URL defaults to the string looking like a url around point."
         (xwidget-webkit-new-session url)
       (xwidget-webkit-goto-url url))))
 
-;; NOTE: @javascript-callback - prefer defun to lambda.
-;; Lambda seems to be more easily garbage collected in flight from
-;; `xwidget-webkit-execute-script' to its execution via event.
-
-;; @javascript-callback
-(defun xwidget-webkit-cx2-cb (url)
-  "New xwidget webkit session and buffer with URL in split window below."
-  (with-selected-window (split-window-below)
-    (xwidget-webkit-new-session url)))
-
-;; @javascript-callback
-(defun xwidget-webkit-cx3-cb (url)
-  "New xwidget webkit session and buffer with URL in split window right."
-  (with-selected-window (split-window-right)
-    (xwidget-webkit-new-session url)))
-
 (defun xwidget-webkit-cx2 ()
-  "Get the URL of current session, then `xwidget-webkit-cx2-cb'."
+  "Get the URL of current session, then browse to the URL \
+in `split-window-below' with a new xwidget webkit session."
   (interactive)
-  (xwidget-webkit-execute-script
-   (xwidget-webkit-current-session)
-   "document.URL"
-   'xwidget-webkit-cx2-cb))
+  (let ((url (xwidget-webkit-current-url)))
+    (with-selected-window (split-window-below)
+      (xwidget-webkit-new-session url))))
 
 (defun xwidget-webkit-cx3 ()
-  "Get the URL of current session, then `xwidget-webkit-cx3-cb'."
+  "Get the URL of current session, then browse to the URL \
+in `split-window-right' with a new xwidget webkit session."
   (interactive)
-  (xwidget-webkit-execute-script
-   (xwidget-webkit-current-session)
-   "document.URL"
-   'xwidget-webkit-cx3-cb))
+  (let ((url (xwidget-webkit-current-url)))
+    (with-selected-window (split-window-right)
+      (xwidget-webkit-new-session url))))
 
 ;;todo.
 ;; - check that the webkit support is compiled in
@@ -136,29 +125,31 @@ Interactively, URL defaults to the string looking like a url around point."
     (define-key map "g" 'xwidget-webkit-browse-url)
     (define-key map "a" 'xwidget-webkit-adjust-size-dispatch)
     (define-key map "b" 'xwidget-webkit-back)
+    (define-key map "f" 'xwidget-webkit-forward)
     (define-key map "r" 'xwidget-webkit-reload)
     (define-key map "t" (lambda () (interactive) (message "o"))) ;FIXME: ?!?
     (define-key map "\C-m" 'xwidget-webkit-insert-string)
-    (define-key map "w" 'xwidget-webkit-current-url)
+    (define-key map "w" 'xwidget-webkit-current-url-message-kill)
     (define-key map "+" 'xwidget-webkit-zoom-in)
     (define-key map "-" 'xwidget-webkit-zoom-out)
 
     ;;similar to image mode bindings
     (define-key map (kbd "SPC")                 'xwidget-webkit-scroll-up)
+    (define-key map (kbd "S-SPC")               'xwidget-webkit-scroll-down)
     (define-key map (kbd "DEL")                 'xwidget-webkit-scroll-down)
 
-    (define-key map [remap scroll-up]           'xwidget-webkit-scroll-up)
+    (define-key map [remap scroll-up]           'xwidget-webkit-scroll-up-line)
     (define-key map [remap scroll-up-command]   'xwidget-webkit-scroll-up)
 
-    (define-key map [remap scroll-down]         'xwidget-webkit-scroll-down)
+    (define-key map [remap scroll-down]         'xwidget-webkit-scroll-down-line)
     (define-key map [remap scroll-down-command] 'xwidget-webkit-scroll-down)
 
     (define-key map [remap forward-char]        'xwidget-webkit-scroll-forward)
     (define-key map [remap backward-char]       'xwidget-webkit-scroll-backward)
     (define-key map [remap right-char]          'xwidget-webkit-scroll-forward)
     (define-key map [remap left-char]           'xwidget-webkit-scroll-backward)
-    (define-key map [remap previous-line]       'xwidget-webkit-scroll-down)
-    (define-key map [remap next-line]           'xwidget-webkit-scroll-up)
+    (define-key map [remap previous-line]       'xwidget-webkit-scroll-down-line)
+    (define-key map [remap next-line]           'xwidget-webkit-scroll-up-line)
 
     ;; (define-key map [remap move-beginning-of-line] 'image-bol)
     ;; (define-key map [remap move-end-of-line]       'image-eol)
@@ -183,19 +174,44 @@ Interactively, URL defaults to the string looking like a url around point."
   (interactive)
   (xwidget-webkit-zoom (xwidget-webkit-current-session) -0.1))
 
-(defun xwidget-webkit-scroll-up ()
-  "Scroll webkit up."
-  (interactive)
+(defun xwidget-webkit-scroll-up (&optional n)
+  "Scroll webkit up by N pixels or window height pixels.
+Stop if the bottom edge of the page is reached.
+If N is omitted or nil, scroll up by window height pixels."
+  (interactive "P")
   (xwidget-webkit-execute-script
    (xwidget-webkit-current-session)
-   "window.scrollBy(0, 50);"))
+   (cond ((null n) "window.scrollBy(0, window.document.body.clientHeight);")
+         (t (format "window.scrollBy(0, %d);" n)))))
 
-(defun xwidget-webkit-scroll-down ()
-  "Scroll webkit down."
-  (interactive)
+(defun xwidget-webkit-scroll-down (&optional n)
+  "Scroll webkit down by N pixels or window height pixels.
+Stop if the top edge of the page is reached.
+If N is omitted or nil, scroll down by window height pixels."
+  (interactive "P")
   (xwidget-webkit-execute-script
    (xwidget-webkit-current-session)
-   "window.scrollBy(0, -50);"))
+   (cond ((null n) "window.scrollBy(0, -window.document.body.clientHeight);")
+         (t (format "window.scrollBy(0, %d);" (- n))))))
+
+(defvar xwidget-webkit-scroll-line-height 50
+  "Default line height in pixels for scroll xwidget webkit.")
+
+(defun xwidget-webkit-scroll-up-line (&optional n)
+  "Scroll webkit up by N lines.
+The height of line is `xwidget-webkit-scroll-line-height' pixels.
+Stop if the bottom edge of the page is reached.
+If N is omitted or nil, scroll up by one line."
+  (interactive "p")
+  (xwidget-webkit-scroll-up (* n xwidget-webkit-scroll-line-height)))
+
+(defun xwidget-webkit-scroll-down-line (&optional n)
+  "Scroll webkit down by N lines.
+The height of line is `xwidget-webkit-scroll-line-height' pixels.
+Stop if the top edge of the page is reached.
+If N is omitted or nil, scroll down by one line."
+  (interactive "p")
+  (xwidget-webkit-scroll-down (* n xwidget-webkit-scroll-line-height)))
 
 (defun xwidget-webkit-scroll-forward ()
   "Scroll webkit forwards."
@@ -223,7 +239,7 @@ Interactively, URL defaults to the string looking like a url around point."
   (interactive)
   (xwidget-webkit-execute-script
    (xwidget-webkit-current-session)
-   "window.scrollTo(pageXOffset, window.document.body.clientHeight);"))
+   "window.scrollTo(pageXOffset, window.document.body.scrollHeight);"))
 
 ;; The xwidget event needs to go into a higher level handler
 ;; since the xwidget can generate an event even if it's offscreen.
@@ -256,25 +272,13 @@ XWIDGET instance, XWIDGET-EVENT-TYPE depends on the originating xwidget."
       (xwidget-log
        "error: callback called for xwidget with dead buffer")
     (with-current-buffer (xwidget-buffer xwidget)
-
-      ;; @javascript-callback
-      ;; We do not change selected window due to getting to knowing
-      ;; URL and title.  And also do not adjust webkit size to window
-      ;; here, the window can be the mini-buffer window unwantedly.
-      (defun xwidget-webkit-url-title-cb (url-title)
-        "Put URL as text property and change buffer name using TITLE."
-        (let ((url (car url-title))
-              (title (car (cdr url-title))))
-          (xwidget-log "webkit finished loading: '%s' from '%s'" title url)
-          (setq buffer-read-only nil)
-          (put-text-property 2 3 'URL url)
-          (setq buffer-read-only t)
-          (rename-buffer (format "*xwidget webkit: %s *" title))))
-
       (cond ((eq xwidget-event-type 'load-changed)
-             (xwidget-webkit-execute-script
-              xwidget "[document.URL, document.title]"
-              'xwidget-webkit-url-title-cb))
+;;; We do not change selected window for the finish of loading a page.
+;;; And do not adjust webkit size to window here, the selected window
+;;; can be the mini-buffer window unwantedly.
+             (let ((title (xwidget-webkit-title xwidget)))
+               (xwidget-log "webkit finished loading: %s" title)
+               (rename-buffer (format "*xwidget webkit: %s *" title) t)))
             ((eq xwidget-event-type 'decide-policy)
              (let ((strarg  (nth 3 last-input-event)))
                (if (string-match ".*#\\(.*\\)" strarg)
@@ -313,12 +317,10 @@ If non-nil, it will use a new session.  Otherwise, it will use
 nil, consider further customization with
 `xwidget-webkit-last-session-buffer'.")
 
-;; We avoid using async `xwidget-webkit-current-url', instead use URL
-;; kept in xwidget webkit as property
 (defun xwidget-webkit-bookmark-make-record ()
   "Integrate Emacs bookmarks with the webkit xwidget."
   (nconc (bookmark-make-record-default t t)
-         `((filename . ,(get-text-property 2 'URL))
+         `((filename . ,(xwidget-webkit-current-url))
            (handler  . (lambda (bmk)
                          (browse-url
                           (bookmark-prop-get bmk 'filename)
@@ -656,27 +658,27 @@ For example, use this to display an anchor."
 (defun xwidget-webkit-back ()
   "Go back in history."
   (interactive)
-  (xwidget-webkit-execute-script (xwidget-webkit-current-session)
-                                 "history.go(-1);"))
+  (xwidget-webkit-goto-history (xwidget-webkit-current-session) -1))
+
+(defun xwidget-webkit-forward ()
+  "Go forward in history."
+  (interactive)
+  (xwidget-webkit-goto-history (xwidget-webkit-current-session) 1))
 
 (defun xwidget-webkit-reload ()
-  "Reload current url."
+  "Reload current URL."
   (interactive)
-  (xwidget-webkit-execute-script (xwidget-webkit-current-session)
-                                 "history.go(0);"))
-
-;; @javascript-callback
-(defun xwidget-webkit-current-url-cb (result)
-  "Callback for `xwidget-webkit-current-url', message and kill the RESULT."
-  (let ((url (kill-new (or result ""))))
-    (message "url: %s" url)))
+  (xwidget-webkit-goto-history (xwidget-webkit-current-session) 0))
 
 (defun xwidget-webkit-current-url ()
-  "Get the webkit url and place it on the `kill-ring'."
+  "Get the current xwidget webkit URL."
   (interactive)
-  (xwidget-webkit-execute-script
-   (xwidget-webkit-current-session)
-   "document.URL" 'xwidget-webkit-current-url-cb))
+  (xwidget-webkit-uri (xwidget-webkit-current-session)))
+
+(defun xwidget-webkit-current-url-message-kill ()
+  "Message the current xwidget webkit URL and place it on the `kill-ring'."
+  (interactive)
+  (message "url: %s" (kill-new (or (xwidget-webkit-current-url) ""))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defun xwidget-webkit-get-selection (proc)

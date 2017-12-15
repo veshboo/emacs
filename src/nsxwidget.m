@@ -28,7 +28,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "nsterm.h"
 #include "xwidget.h"
 
-/* in xwidget.c */
+/* Defined in 'xwidget.c'.  */
 void store_xwidget_event_string (struct xwidget *xw,
                                  const char *eventname,
                                  const char *eventstr);
@@ -54,14 +54,16 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
    be presented and will be preferred, if agreeable.
 
    For other widget types, OSR seems possible, but will not care for a
-   while.
-*/
+   while.  */
 
-/* xwidget webkit */
+/* Xwidget webkit.  */
 
 @interface XwWebView : WKWebView
 <WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler>
 @property struct xwidget *xw;
+/* Map url to whether javascript is blocked by
+   'Content-Security-Policy' sandbox without allow-scripts.  */
+@property(retain) NSMutableDictionary *urlScriptBlocked;
 @end
 @implementation XwWebView : WKWebView
 
@@ -69,14 +71,19 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
       configuration:(WKWebViewConfiguration *)configuration
             xwidget:(struct xwidget *)xw
 {
-  /* Script controller to add script message handler and user script */
+  /* Script controller to add script message handler and user script.  */
   WKUserContentController *scriptor = [[WKUserContentController alloc] init];
   configuration.userContentController = scriptor;
+
+  /* Enable inspect element context menu item for debugging.  */
+  [configuration.preferences setValue:@YES
+                               forKey:@"developerExtrasEnabled"];
 
   self = [super initWithFrame:frame configuration:configuration];
   if (self)
     {
       self.xw = xw;
+      self.urlScriptBlocked = [[NSMutableDictionary alloc] init];
       self.navigationDelegate = self;
       self.UIDelegate = self;
       self.customUserAgent =
@@ -87,14 +94,14 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
       [scriptor addUserScript:[[WKUserScript alloc]
                                 initWithSource:xwScript
                                  injectionTime:
-                                  WKUserScriptInjectionTimeAtDocumentEnd
+                                  WKUserScriptInjectionTimeAtDocumentStart
                                 forMainFrameOnly:NO]];
     }
   return self;
 }
 
 #if 0
-/* Non ARC - just to check lifecycle */
+/* Non ARC - just to check lifecycle.  */
 - (void)dealloc
 {
   NSLog (@"XwWebView dealloc");
@@ -105,7 +112,8 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
 - (void)webView:(WKWebView *)webView
 didFinishNavigation:(WKNavigation *)navigation
 {
-  store_xwidget_event_string (self.xw, "load-changed", "");
+  if (EQ (Fbuffer_live_p (self.xw->buffer), Qt))
+    store_xwidget_event_string (self.xw, "load-changed", "");
 }
 
 - (void)webView:(WKWebView *)webView
@@ -129,13 +137,35 @@ decisionHandler:(void (^)(WKNavigationResponsePolicy))decisionHandler
 {
   if (!navigationResponse.canShowMIMEType)
     {
-      /* TODO: download using NSURLxxx? */
+      /* TODO: download using NSURLxxx?  */
     }
   decisionHandler (WKNavigationResponsePolicyAllow);
+
+  self.urlScriptBlocked[navigationResponse.response.URL] =
+    [NSNumber numberWithBool:NO];
+  if ([navigationResponse.response isKindOfClass:[NSHTTPURLResponse class]])
+    {
+      NSDictionary *headers =
+        ((NSHTTPURLResponse *) navigationResponse.response).allHeaderFields;
+      NSString *value = headers[@"Content-Security-Policy"];
+      if (value)
+        {
+          /* TODO: Sloppy parsing of 'Content-Security-Policy' value.  */
+          NSRange sandbox = [value rangeOfString:@"sandbox"];
+          if (sandbox.location != NSNotFound)
+            {
+              NSRange allowScripts = [value rangeOfString:@"allow-scripts"];
+              if (allowScripts.location == NSNotFound
+                  || allowScripts.location < sandbox.location)
+                self.urlScriptBlocked[navigationResponse.response.URL] =
+                  [NSNumber numberWithBool:YES];
+            }
+        }
+    }
 }
 
 /* No additional new webview or emacs window will be created
-   for <a ... target="_blank"> */
+   for <a ... target="_blank">.  */
 - (WKWebView *)webView:(WKWebView *)webView
 createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
    forNavigationAction:(WKNavigationAction *)navigationAction
@@ -147,8 +177,8 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
 }
 
 /* By forwarding mouse events to emacs view (frame)
-   - mouse click in webview selects the window contains the webview
-   - correct mouse hand/arrow/I-beam is display (TODO: not perfect yet)
+   - Mouse click in webview selects the window contains the webview.
+   - Correct mouse hand/arrow/I-beam is displayed (TODO: not perfect yet).
 */
 
 - (void)mouseDown:(NSEvent *)event
@@ -166,7 +196,7 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
 /* Basically we want keyboard events handled by emacs unless an input
    element has focus.  Especially, while incremental search, we set
    emacs as first responder to avoid focus held in an input element
-   with matching text. */
+   with matching text.  */
 
 - (void)keyDown:(NSEvent *)event
 {
@@ -179,10 +209,20 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
       return;
     }
 
+  /* Emacs handles keyboard events when javascript is blocked.  */
+  if ([self.urlScriptBlocked[self.URL] boolValue])
+    {
+      [self.xw->xv->emacswindow keyDown:event];
+      return;
+    }
+
   [self evaluateJavaScript:@"xwHasFocus()"
          completionHandler:^(id result, NSError *error) {
       if (error)
-        NSLog (@"xwHasFocus: %@", error.localizedDescription);
+        {
+          NSLog (@"xwHasFocus: %@", error);
+          [self.xw->xv->emacswindow keyDown:event];
+        }
       else if (result)
         {
           NSNumber *hasFocus = result; /* __NSCFBoolean */
@@ -198,14 +238,14 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
 {
   /* We should do nothing and do not forward (default implementation
      if we not override here) to let emacs collect key events and ask
-     interpretKeyEvents to its superclass */
+     interpretKeyEvents to its superclass.  */
 }
 
 static NSString *xwScript;
 + (void)initialize
 {
   /* Find out if an input element has focus.
-     Message to script message handler when 'C-g' key down. */
+     Message to script message handler when 'C-g' key down.  */
   if (!xwScript)
     xwScript =
       @"function xwHasFocus() {"
@@ -227,21 +267,23 @@ static NSString *xwScript;
 }
 
 /* Confirming to WKScriptMessageHandler, listens concerning keyDown in
-   webkit. Currently 'C-g'. */
+   webkit. Currently 'C-g'.  */
 - (void)userContentController:(WKUserContentController *)userContentController
       didReceiveScriptMessage:(WKScriptMessage *)message
 {
-  if ([message.body isEqualToString:@"C-g"]) /* NSTaggedPointerString */
+  if ([message.body isEqualToString:@"C-g"])
     {
       /* Just give up focus, no relay "C-g" to emacs, another "C-g"
-         follows will be handled by emacs. */
+         follows will be handled by emacs.  */
       [self.window makeFirstResponder:self.xw->xv->emacswindow];
     }
 }
 
 @end
 
-/* webkit command */
+/* Xwidget webkit commands.  */
+
+static Lisp_Object build_string_with_nsstr (NSString *nsstr);
 
 bool
 nsxwidget_is_web_view (struct xwidget *xw)
@@ -250,8 +292,22 @@ nsxwidget_is_web_view (struct xwidget *xw)
     [xw->xwWidget isKindOfClass:WKWebView.class];
 }
 
-/* @Note ATS - application transport security in 'Info.plist' or
-   remote pages will not loaded */
+Lisp_Object
+nsxwidget_webkit_uri (struct xwidget *xw)
+{
+  XwWebView *xwWebView = (XwWebView *) xw->xwWidget;
+  return build_string_with_nsstr (xwWebView.URL.absoluteString);
+}
+
+Lisp_Object
+nsxwidget_webkit_title (struct xwidget *xw)
+{
+  XwWebView *xwWebView = (XwWebView *) xw->xwWidget;
+  return build_string_with_nsstr (xwWebView.title);
+}
+
+/* @Note ATS - Need application transport security in 'Info.plist' or
+   remote pages will not loaded.  */
 void
 nsxwidget_webkit_goto_uri (struct xwidget *xw, const char *uri)
 {
@@ -263,11 +319,22 @@ nsxwidget_webkit_goto_uri (struct xwidget *xw, const char *uri)
 }
 
 void
+nsxwidget_webkit_goto_history (struct xwidget *xw, int rel_pos)
+{
+  XwWebView *xwWebView = (XwWebView *) xw->xwWidget;
+  switch (rel_pos) {
+  case -1: [xwWebView goBack]; break;
+  case 0: [xwWebView reload]; break;
+  case 1: [xwWebView goForward]; break;
+  }
+}
+
+void
 nsxwidget_webkit_zoom (struct xwidget *xw, double zoom_change)
 {
   XwWebView *xwWebView = (XwWebView *) xw->xwWidget;
   xwWebView.magnification += zoom_change;
-  /* TODO: setMagnification:centeredAtPoint */
+  /* TODO: setMagnification:centeredAtPoint.  */
 }
 
 /* Build lisp string */
@@ -280,7 +347,7 @@ build_string_with_nsstr (NSString *nsstr)
 }
 
 /* Recursively convert an objc native type JavaScript value to a Lisp
-   value.  Mostly copied from GTK xwidget 'webkit_js_to_lisp' */
+   value.  Mostly copied from GTK xwidget 'webkit_js_to_lisp'.  */
 static Lisp_Object
 js_to_lisp (id value)
 {
@@ -292,7 +359,7 @@ js_to_lisp (id value)
     {
       NSNumber *nsnum = (NSNumber *) value;
       char type = nsnum.objCType[0];
-      if (type == 'c') /* __NSCFBoolean has type character 'c' */
+      if (type == 'c') /* __NSCFBoolean has type character 'c'.  */
         return nsnum.boolValue? Qt : Qnil;
       else
         {
@@ -300,7 +367,7 @@ js_to_lisp (id value)
             return make_number (nsnum.longValue);
           else if (type == 'f' || type == 'd')
             return make_float (nsnum.doubleValue);
-          /* else fall through */
+          /* else fall through.  */
         }
     }
   else if ([value isKindOfClass:NSArray.class])
@@ -341,9 +408,14 @@ void
 nsxwidget_webkit_execute_script (struct xwidget *xw, const char *script,
                                  Lisp_Object fun)
 {
-  NSString *javascriptString = [NSString stringWithUTF8String:script];
   XwWebView *xwWebView = (XwWebView *) xw->xwWidget;
+  if ([xwWebView.urlScriptBlocked[xwWebView.URL] boolValue])
+    {
+      message ("Javascript is blocked by 'CSP: sandbox'.");
+      return;
+    }
 
+  NSString *javascriptString = [NSString stringWithUTF8String:script];
   [xwWebView evaluateJavaScript:javascriptString
               completionHandler:^(id result, NSError *error) {
       if (error)
@@ -360,13 +432,13 @@ nsxwidget_webkit_execute_script (struct xwidget *xw, const char *script,
     }];
 }
 
-/* window containing an xwidget */
+/* Window containing an xwidget.  */
 
 @implementation XwWindow
 - (BOOL)isFlipped { return YES; }
 @end
 
-/* xw : xwidget model, ns cocoa part */
+/* Xwidget model, macOS Cocoa part.  */
 
 void
 nsxwidget_init(struct xwidget *xw)
@@ -380,7 +452,7 @@ nsxwidget_init(struct xwidget *xw)
   xw->xwWindow = [[XwWindow alloc]
                    initWithFrame:rect];
   [xw->xwWindow addSubview:xw->xwWidget];
-  xw->xv = NULL; /* for 1 to 1 relationship of webkit2 */
+  xw->xv = NULL; /* for 1 to 1 relationship of webkit2.  */
   unblock_input ();
 }
 
@@ -392,10 +464,16 @@ nsxwidget_kill (struct xwidget *xw)
       WKUserContentController *scriptor =
         ((XwWebView *) xw->xwWidget).configuration.userContentController;
       [scriptor removeAllUserScripts];
-      [scriptor removeScriptMessageHandlerForName:@"focusHandler"];
+      [scriptor removeScriptMessageHandlerForName:@"keyDown"];
       [scriptor release];
       if (xw->xv)
-        xw->xv->model = Qnil; /* Make sure related view stale */
+        xw->xv->model = Qnil; /* Make sure related view stale.  */
+
+      /* This stops playing audio when a xwidget-webkit buffer is
+         killed.  I could not find other solution.  */
+      nsxwidget_webkit_goto_uri (xw, "about:blank");
+
+      [((XwWebView *) xw->xwWidget).urlScriptBlocked release];
       [xw->xwWidget removeFromSuperviewWithoutNeedingDisplay];
       [xw->xwWidget release];
       [xw->xwWindow removeFromSuperviewWithoutNeedingDisplay];
@@ -421,7 +499,7 @@ nsxwidget_get_size (struct xwidget *xw)
                 make_number (xw->xwWidget.frame.size.height));
 }
 
-/* xv : xwidget view, ns cocoa part */
+/* Xwidget view, macOS Cocoa part.  */
 
 @implementation XvWindow : NSView
 - (BOOL)isFlipped { return YES; }
@@ -434,8 +512,8 @@ nsxwidget_init_view (struct xwidget_view *xv,
                      int x, int y)
 {
   /* 'x_draw_xwidget_glyph_string' will calculate correct position and
-     size of clip to draw in emacs buffer window. Thus, just begin at
-     origin with no crop. */
+     size of clip to draw in emacs buffer window.  Thus, just begin at
+     origin with no crop.  */
   xv->x = x;
   xv->y = y;
   xv->clip_left = 0;
@@ -448,7 +526,7 @@ nsxwidget_init_view (struct xwidget_view *xv,
   xv->xvWindow.xw = xw;
   xv->xvWindow.xv = xv;
 
-  xw->xv = xv; /* For 1 to 1 relationship of webkit2 */
+  xw->xv = xv; /* For 1 to 1 relationship of webkit2.  */
   [xv->xvWindow addSubview:xw->xwWindow];
 
   xv->emacswindow = FRAME_NS_VIEW (s->f);
@@ -462,7 +540,7 @@ nsxwidget_delete_view (struct xwidget_view *xv)
     {
       struct xwidget *xw = XXWIDGET (xv->model);
       [xw->xwWindow removeFromSuperviewWithoutNeedingDisplay];
-      xw->xv = NULL; /* Now model has no view */
+      xw->xv = NULL; /* Now model has no view.  */
     }
   [xv->xvWindow removeFromSuperviewWithoutNeedingDisplay];
   [xv->xvWindow release];
@@ -495,7 +573,7 @@ nsxwidget_move_view (struct xwidget_view *xv, int x, int y)
   [xv->xvWindow setFrameOrigin:NSMakePoint (x, y)];
 }
 
-/* Move model window in container (view window) */
+/* Move model window in container (view window).  */
 void
 nsxwidget_move_widget_in_view (struct xwidget_view *xv, int x, int y)
 {
