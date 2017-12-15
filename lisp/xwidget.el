@@ -135,20 +135,21 @@ in `split-window-right' with a new xwidget webkit session."
 
     ;;similar to image mode bindings
     (define-key map (kbd "SPC")                 'xwidget-webkit-scroll-up)
+    (define-key map (kbd "S-SPC")               'xwidget-webkit-scroll-down)
     (define-key map (kbd "DEL")                 'xwidget-webkit-scroll-down)
 
-    (define-key map [remap scroll-up]           'xwidget-webkit-scroll-up)
+    (define-key map [remap scroll-up]           'xwidget-webkit-scroll-up-line)
     (define-key map [remap scroll-up-command]   'xwidget-webkit-scroll-up)
 
-    (define-key map [remap scroll-down]         'xwidget-webkit-scroll-down)
+    (define-key map [remap scroll-down]         'xwidget-webkit-scroll-down-line)
     (define-key map [remap scroll-down-command] 'xwidget-webkit-scroll-down)
 
     (define-key map [remap forward-char]        'xwidget-webkit-scroll-forward)
     (define-key map [remap backward-char]       'xwidget-webkit-scroll-backward)
     (define-key map [remap right-char]          'xwidget-webkit-scroll-forward)
     (define-key map [remap left-char]           'xwidget-webkit-scroll-backward)
-    (define-key map [remap previous-line]       'xwidget-webkit-scroll-down)
-    (define-key map [remap next-line]           'xwidget-webkit-scroll-up)
+    (define-key map [remap previous-line]       'xwidget-webkit-scroll-down-line)
+    (define-key map [remap next-line]           'xwidget-webkit-scroll-up-line)
 
     ;; (define-key map [remap move-beginning-of-line] 'image-bol)
     ;; (define-key map [remap move-end-of-line]       'image-eol)
@@ -173,19 +174,45 @@ in `split-window-right' with a new xwidget webkit session."
   (interactive)
   (xwidget-webkit-zoom (xwidget-webkit-current-session) -0.1))
 
-(defun xwidget-webkit-scroll-up ()
-  "Scroll webkit up."
-  (interactive)
+(defun xwidget-webkit-scroll-up (&optional n)
+  "Scroll webkit up by N pixels or window height pixels.
+Stop if the bottom edge of the page is reached.
+If N is omitted or nil, scroll up by window height pixels."
+  (interactive "P")
+  (message "scroll-up n=%S" n)
   (xwidget-webkit-execute-script
    (xwidget-webkit-current-session)
-   "window.scrollBy(0, 50);"))
+   (cond ((null n) "window.scrollBy(0, window.document.body.clientHeight);")
+         (t (format "window.scrollBy(0, %d);" n)))))
 
-(defun xwidget-webkit-scroll-down ()
-  "Scroll webkit down."
-  (interactive)
+(defun xwidget-webkit-scroll-down (&optional n)
+  "Scroll webkit down by N pixels or window height pixels.
+Stop if the top edge of the page is reached.
+If N is omitted or nil, scroll down by window height pixels."
+  (interactive "P")
   (xwidget-webkit-execute-script
    (xwidget-webkit-current-session)
-   "window.scrollBy(0, -50);"))
+   (cond ((null n) "window.scrollBy(0, -window.document.body.clientHeight);")
+         (t (format "window.scrollBy(0, %d);" (- n))))))
+
+(defvar xwidget-webkit-scroll-line-height 50
+  "Default line height in pixels for scroll xwidget webkit.")
+
+(defun xwidget-webkit-scroll-up-line (&optional n)
+  "Scroll webkit up by N lines.
+The height of line is `xwidget-webkit-scroll-line-height' pixels.
+Stop if the bottom edge of the page is reached.
+If N is omitted or nil, scroll up by one line."
+  (interactive "p")
+  (xwidget-webkit-scroll-up (* n xwidget-webkit-scroll-line-height)))
+
+(defun xwidget-webkit-scroll-down-line (&optional n)
+  "Scroll webkit down by N lines.
+The height of line is `xwidget-webkit-scroll-line-height' pixels.
+Stop if the top edge of the page is reached.
+If N is omitted or nil, scroll down by one line."
+  (interactive "p")
+  (xwidget-webkit-scroll-down (* n xwidget-webkit-scroll-line-height)))
 
 (defun xwidget-webkit-scroll-forward ()
   "Scroll webkit forwards."
@@ -213,7 +240,7 @@ in `split-window-right' with a new xwidget webkit session."
   (interactive)
   (xwidget-webkit-execute-script
    (xwidget-webkit-current-session)
-   "window.scrollTo(pageXOffset, window.document.body.clientHeight);"))
+   "window.scrollTo(pageXOffset, window.document.body.scrollHeight);"))
 
 ;; The xwidget event needs to go into a higher level handler
 ;; since the xwidget can generate an event even if it's offscreen.
