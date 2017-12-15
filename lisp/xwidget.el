@@ -181,7 +181,9 @@ If N is omitted or nil, scroll up by window height pixels."
   (interactive "P")
   (xwidget-webkit-execute-script
    (xwidget-webkit-current-session)
-   (cond ((null n) "window.scrollBy(0, window.document.body.clientHeight);")
+   (cond ((null n)
+          (format "window.scrollBy(0, %d);"
+                  (xwidget-window-inside-pixel-height (selected-window))))
          (t (format "window.scrollBy(0, %d);" n)))))
 
 (defun xwidget-webkit-scroll-down (&optional n)
@@ -191,7 +193,9 @@ If N is omitted or nil, scroll down by window height pixels."
   (interactive "P")
   (xwidget-webkit-execute-script
    (xwidget-webkit-current-session)
-   (cond ((null n) "window.scrollBy(0, -window.document.body.clientHeight);")
+   (cond ((null n)
+          (format "window.scrollBy(0, %d);"
+                  (- (xwidget-window-inside-pixel-height (selected-window)))))
          (t (format "window.scrollBy(0, %d);" (- n))))))
 
 (defvar xwidget-webkit-scroll-line-height 50
