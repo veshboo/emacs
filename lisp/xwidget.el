@@ -179,7 +179,6 @@ in `split-window-right' with a new xwidget webkit session."
 Stop if the bottom edge of the page is reached.
 If N is omitted or nil, scroll up by window height pixels."
   (interactive "P")
-  (message "scroll-up n=%S" n)
   (xwidget-webkit-execute-script
    (xwidget-webkit-current-session)
    (cond ((null n) "window.scrollBy(0, window.document.body.clientHeight);")
