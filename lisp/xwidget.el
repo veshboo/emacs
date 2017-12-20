@@ -300,6 +300,11 @@ XWIDGET instance, XWIDGET-EVENT-TYPE depends on the originating xwidget."
 
 (defvar bookmark-make-record-function)
 (defvar isearch-search-fun-function)
+(when (memq window-system '(mac ns))
+  (defvar xwidget-webkit-enable-plugins nil
+    "Enable plugins for xwidget webkit.
+If non-nil, plugins are enabled.  Otherwise, disabled."))
+
 (define-derived-mode xwidget-webkit-mode
     special-mode "xwidget-webkit" "Xwidget webkit view mode."
     (setq buffer-read-only t)

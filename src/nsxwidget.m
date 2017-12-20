@@ -79,6 +79,11 @@ void store_xwidget_js_callback_event (struct xwidget *xw,
   [configuration.preferences setValue:@YES
                                forKey:@"developerExtrasEnabled"];
 
+  Lisp_Object enablePlugins =
+    Fintern (build_string ("xwidget-webkit-enable-plugins"), Qnil);
+  if (!EQ (Fsymbol_value (enablePlugins), Qnil))
+    configuration.preferences.plugInsEnabled = YES;
+
   self = [super initWithFrame:frame configuration:configuration];
   if (self)
     {
