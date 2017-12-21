@@ -33,6 +33,11 @@ void store_xwidget_event_string (struct xwidget *xw,
                                  const char *eventname,
                                  const char *eventstr);
 
+void store_xwidget_response_callback_event (struct xwidget *xw,
+                                            const char *url,
+                                            const char *mimetype,
+                                            const char *filename);
+
 void store_xwidget_js_callback_event (struct xwidget *xw,
                                       Lisp_Object proc,
                                       Lisp_Object argument);
@@ -142,7 +147,15 @@ decisionHandler:(void (^)(WKNavigationResponsePolicy))decisionHandler
 {
   if (!navigationResponse.canShowMIMEType)
     {
-      /* TODO: download using NSURLxxx?  */
+      NSString *url = navigationResponse.response.URL.absoluteString;
+      NSString *mimetype = navigationResponse.response.MIMEType;
+      NSString *filename = navigationResponse.response.suggestedFilename;
+      decisionHandler (WKNavigationResponsePolicyCancel);
+      store_xwidget_response_callback_event (self.xw,
+                                             url.UTF8String,
+                                             mimetype.UTF8String,
+                                             filename.UTF8String);
+      return;
     }
   decisionHandler (WKNavigationResponsePolicyAllow);
 
@@ -157,7 +170,10 @@ decisionHandler:(void (^)(WKNavigationResponsePolicy))decisionHandler
         {
           /* TODO: Sloppy parsing of 'Content-Security-Policy' value.  */
           NSRange sandbox = [value rangeOfString:@"sandbox"];
-          if (sandbox.location != NSNotFound)
+          if (sandbox.location != NSNotFound
+              && (sandbox.location == 0
+                  || [value characterAtIndex:(sandbox.location - 1)] == ' '
+                  || [value characterAtIndex:(sandbox.location - 1)] == ';'))
             {
               NSRange allowScripts = [value rangeOfString:@"allow-scripts"];
               if (allowScripts.location == NSNotFound
@@ -179,6 +195,22 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
   if (!navigationAction.targetFrame.isMainFrame)
     [webView loadRequest:navigationAction.request];
   return nil;
+}
+
+/* Open panel for file upload.  */
+- (void)webView:(WKWebView *)webView
+runOpenPanelWithParameters:(WKOpenPanelParameters *)parameters
+initiatedByFrame:(WKFrameInfo *)frame
+completionHandler:(void (^)(NSArray<NSURL *> *URLs))completionHandler
+{
+  NSOpenPanel *openPanel = [NSOpenPanel openPanel];
+  openPanel.canChooseFiles = YES;
+  openPanel.canChooseDirectories = NO;
+  openPanel.allowsMultipleSelection = parameters.allowsMultipleSelection;
+  if ([openPanel runModal] == NSModalResponseOK)
+    completionHandler (openPanel.URLs);
+  else
+    completionHandler (nil);
 }
 
 /* By forwarding mouse events to emacs view (frame)
