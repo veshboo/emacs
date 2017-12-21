@@ -84,6 +84,7 @@ This returns the result of `make-xwidget'."
 (require 'browse-url)
 (require 'image-mode);;for some image-mode alike functionality
 (require 'seq)
+(require 'url-handlers)
 
 ;;;###autoload
 (defun xwidget-webkit-browse-url (url &optional new-session)
@@ -289,6 +290,12 @@ XWIDGET instance, XWIDGET-EVENT-TYPE depends on the originating xwidget."
                    (xwidget-webkit-show-id-or-named-element
                     xwidget
                     (match-string 1 strarg)))))
+;;; TODO: Response handling other than download.
+            ((eq xwidget-event-type 'response-callback)
+             (let ((url  (nth 3 last-input-event))
+                   (mime-type (nth 4 last-input-event))
+                   (file-name (nth 5 last-input-event)))
+               (xwidget-webkit-save-as-file xwidget url mime-type file-name)))
             ((eq xwidget-event-type 'javascript-callback)
              (let ((proc (nth 3 last-input-event))
                    (arg  (nth 4 last-input-event)))
@@ -300,6 +307,11 @@ XWIDGET instance, XWIDGET-EVENT-TYPE depends on the originating xwidget."
 
 (defvar bookmark-make-record-function)
 (defvar isearch-search-fun-function)
+(when (memq window-system '(mac ns))
+  (defvar xwidget-webkit-enable-plugins nil
+    "Enable plugins for xwidget webkit.
+If non-nil, plugins are enabled.  Otherwise, disabled."))
+
 (define-derived-mode xwidget-webkit-mode
     special-mode "xwidget-webkit" "Xwidget webkit view mode."
     (setq buffer-read-only t)
@@ -311,6 +323,22 @@ XWIDGET instance, XWIDGET-EVENT-TYPE depends on the originating xwidget."
     (setq-local isearch-lazy-highlight nil)
     ;; Keep track of [vh]scroll when switching buffers
     (image-mode-setup-winprops))
+
+;;; Download, save as file.
+
+(defvar xwidget-webkit-download-dir "~/Downloads/"
+  "Directory where download file saved.")
+
+(defun xwidget-webkit-save-as-file (xwidget url mime-type &optional file-name)
+  "For XWIDGET webkit, save URL resource of MIME-TYPE as FILE-NAME."
+  (ignore xwidget) ;; Not used currently
+  (let ((save-name (read-file-name
+                    (format "Save '%s' file as: " mime-type)
+                    xwidget-webkit-download-dir file-name nil file-name)))
+    (if (file-directory-p save-name)
+        (setq save-name (concat (file-name-as-directory save-name) file-name)))
+    (setq xwidget-webkit-download-dir (file-name-directory save-name))
+    (url-copy-file url save-name t)))
 
 ;;; Bookmarks integration
 

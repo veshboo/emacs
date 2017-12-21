@@ -256,6 +256,26 @@ store_xwidget_event_string (struct xwidget *xw, const char *eventname,
 }
 
 void
+store_xwidget_response_callback_event (struct xwidget *xw,
+                                       const char *url,
+                                       const char *mimetype,
+                                       const char *filename)
+{
+  struct input_event event;
+  Lisp_Object xwl;
+  XSETXWIDGET (xwl, xw);
+  EVENT_INIT (event);
+  event.kind = XWIDGET_EVENT;
+  event.frame_or_window = Qnil;
+  event.arg = list5 (intern ("response-callback"),
+                     xwl,
+                     build_string (url),
+                     build_string (mimetype),
+                     build_string (filename));
+  kbd_buffer_store_event (&event);
+}
+
+void
 store_xwidget_js_callback_event (struct xwidget *xw,
                                  Lisp_Object proc,
                                  Lisp_Object argument)
@@ -811,8 +831,8 @@ DEFUN ("xwidget-webkit-goto-history",
   WebKitWebView *wkwv = WEBKIT_WEB_VIEW (xw->widget_osr);
   switch (XFASTINT (rel_pos)) {
   case -1: webkit_web_view_go_back (wkwv); break;
-  case 0: webkit_web_view_go_reload (wkwv); break;
-  case 1: webkit_web_view_forward (wkwv); break;
+  case 0: webkit_web_view_reload (wkwv); break;
+  case 1: webkit_web_view_go_forward (wkwv); break;
   }
 #elif defined (NS_IMPL_COCOA)
   nsxwidget_webkit_goto_history (xw, XFASTINT (rel_pos));
