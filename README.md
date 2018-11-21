@@ -33,6 +33,8 @@ git checkout master
 ``` shell
 brew install texinfo
 brew install gnutls
+brew install autoconf
+brew install pkg-config
 ```
 
 * Environment variable for newly installed texinfo (makeinfo)
